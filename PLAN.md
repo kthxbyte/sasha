@@ -23,7 +23,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [x] Task 3.0 — Agent loop hardening (tool-turn liveness)
 - [x] Task 3.1 — REPL dispatch
 - [x] Task 3.2 — Entry point & terminal wiring
-- [ ] Task 3.3 — End-to-end smoke + README ← current
+- [x] Task 3.3 — End-to-end smoke + README
 
 ## v2 (outline only — specced after v1 review)
 
