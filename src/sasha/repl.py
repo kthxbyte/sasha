@@ -1,5 +1,6 @@
 import os
 import shlex
+import sys
 
 from sasha.agent import run_consult
 from sasha.llm import ChatError
@@ -25,14 +26,14 @@ class Repl:
             self._session.add_user(auto_prompt)
         try:
             client = self._client_factory(self._current_profile)
-            buf = []
-            def out_acc(text):
-                buf.append(text)
+            def stream_out(text):
+                sys.stdout.write(text)
+                sys.stdout.flush()
+                if self._out is not print:
+                    self._out(text)
             run_consult(self._session, client, self._executor,
-                        self._confirmer, out_acc,
+                        self._confirmer, stream_out,
                         max_tool_turns=self._config.limits.max_tool_turns)
-            if buf:
-                self._out("".join(buf))
         except ChatError as e:
             self._out(f"[sasha] {self._current_profile.name} unreachable: "
                       f"{e.reason} — 'sasha profile <name>' to switch")
