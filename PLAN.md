@@ -16,11 +16,11 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 2.1 — Streaming chat client
 - [x] Task 2.2 — Session & context building
-- [ ] Task 2.3 — Agent loop with confirmation gate ← current
+- [x] Task 2.3 — Agent loop with confirmation gate
 
 ## Phase 3 — REPL & product assembly
 
-- [ ] Task 3.1 — REPL dispatch
+- [ ] Task 3.1 — REPL dispatch ← current
 - [ ] Task 3.2 — Entry point & terminal wiring
 - [ ] Task 3.3 — End-to-end smoke + README
 
