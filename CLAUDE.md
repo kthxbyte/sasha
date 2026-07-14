@@ -33,6 +33,17 @@ executor is deepseek-v4-pro; export `SASHA_DISPATCH_MODEL` before launching
 no script edit. The signature line travels in the dispatch prompt so it always
 names the model that actually ran.
 
+**Executor routing (Salvador's standing rule, 2026-07-14):** classify each
+task at spec-writing time. *Greenfield* tasks — a new module built against
+committed contract tests — may go to a local model. *Surgical edits* —
+modifying existing control flow, precise behavioral fixes inside code that
+already works — go to **deepseek (the default)**; do not launch those under a
+local-model `SASHA_DISPATCH_MODEL` override. (Empirical basis: a local
+gemma-4-26B one-shot five greenfield modules but failed both surgical tasks
+until given exact fix sketches, and failed the REPL-sized integration task
+outright — see the project's `metrics/dispatches.csv`.) Large multi-module
+integration tasks also default to deepseek.
+
 ## Escalation Points — when Tier 1 gets pulled back in
 
 You re-enter the loop ONLY when:

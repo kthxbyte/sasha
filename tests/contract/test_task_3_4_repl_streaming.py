@@ -91,8 +91,7 @@ def test_ac2_text_precedes_confirmation():
     ]) as stub:
         _repl(stub.base_url, events).run_once("?? check something")
 
-    first_text = next(i for i, (k, v) in enumerate(events)
-                      if k == "out" and "let me look" in v)
     first_ask = next(i for i, (k, v) in enumerate(events) if k == "ask")
-    assert first_text < first_ask, (
+    pre_ask_text = "".join(v for k, v in events[:first_ask] if k == "out")
+    assert "let me look around first" in pre_ask_text, (
         "assistant preamble must reach out() before the confirmation prompt")
