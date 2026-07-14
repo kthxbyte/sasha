@@ -88,6 +88,11 @@ The skeleton must be a working harness: `scripts/verify.sh <base> "Task 1.1"` mu
 
 Every exit — pass or fail — ends with Salvador (or a fresh Tier 1 session) being told why. The loop never self-heals: fixing is a Tier 1 decision.
 
+Every dispatch appends a row to `metrics/dispatches.csv` (gitignored): start/end
+UTC, task, model, duration in seconds, result (`PASS` / `FAIL-gate` /
+`ESCALATE-issue`) — the local ledger of Tier 3 runs, useful for comparing
+executor models. Gitignored so failure rows never dirty the clean-tree gates.
+
 ## verify.sh — the Tier 2 deterministic gate
 
 No LLM, no judgment. Checks shape, not meaning. Copy verbatim into every new repo:

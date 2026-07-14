@@ -8,3 +8,4 @@ build/
 .claude/
 .*.sw?
 *.swp
+metrics/
