@@ -10,11 +10,11 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [x] Task 1.2 — Mute store
 - [x] Task 1.3 — Executor core (subprocess, exit codes, side channel)
 - [x] Task 1.4 — Executor PTY tees (stderr always, stdout opt-in)
-- [ ] Task 1.5 — Trigger engine ← current
+- [x] Task 1.5 — Trigger engine
 
 ## Phase 2 — LLM plumbing (text answers end-to-end)
 
-- [ ] Task 2.1 — Streaming chat client
+- [ ] Task 2.1 — Streaming chat client ← current
 - [ ] Task 2.2 — Session & context building
 - [ ] Task 2.3 — Agent loop with confirmation gate
 
