@@ -15,8 +15,8 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 2 — LLM plumbing (text answers end-to-end)
 
 - [x] Task 2.1 — Streaming chat client
-- [ ] Task 2.2 — Session & context building ← current
-- [ ] Task 2.3 — Agent loop with confirmation gate
+- [x] Task 2.2 — Session & context building
+- [ ] Task 2.3 — Agent loop with confirmation gate ← current
 
 ## Phase 3 — REPL & product assembly
 
