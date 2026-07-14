@@ -77,6 +77,12 @@ The skeleton must be a working harness: `scripts/verify.sh <base> "Task 1.1"` mu
 2. BASE  = git rev-parse HEAD
 3. opencode run --model "$MODEL" "<task spec path + signature line>"     # implement
 4. scripts/verify.sh "$BASE" "$TASK"           || exit 1  # ESCALATE: gate failure
+     (on failure, debris the executor left — untracked files, uncommitted
+      edits — is QUARANTINED, never deleted: copied into gitignored
+      quarantine/<utc>-<task>/, then removed from the tree path-by-path so
+      the clean-tree invariant self-restores. The escalation names the
+      quarantine dir. Debris is evidence — study it before discarding;
+      discarding is always a manual Tier 1 act.)
 5. git log -1 --format=%B | grep -q "^Opened:" && exit 1  # ESCALATE: issue opened
 6. tracking commit (deterministic, sed-driven):
      - PLAN.md: check off $TASK, move `← current` to next task

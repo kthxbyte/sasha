@@ -9,3 +9,4 @@ build/
 .*.sw?
 *.swp
 metrics/
+quarantine/

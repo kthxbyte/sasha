@@ -9,6 +9,29 @@ MODEL="${SASHA_DISPATCH_MODEL:-deepseek/deepseek-v4-pro}"
 
 escalate() { echo "ESCALATE: $1"; exit 1; }
 
+# Executor debris (uncommitted leftovers after a failed dispatch) is evidence:
+# copy it into gitignored quarantine/, then restore the tree path-by-path.
+# Never a blanket `git clean`. Discarding quarantined debris is a Tier 1 act.
+quarantine_debris() {
+  DEBRIS=$(git status --porcelain)
+  [ -n "$DEBRIS" ] || return 0
+  QDIR="quarantine/$(date -u +%Y%m%dT%H%M%SZ)-${TASK// /-}"
+  mkdir -p "$QDIR"
+  printf '%s\n' "$DEBRIS" > "$QDIR/STATUS"
+  git status --porcelain | while read -r st path; do
+    mkdir -p "$QDIR/$(dirname "$path")"
+    if [ "$st" = "??" ]; then
+      cp -r "$path" "$QDIR/$path" && rm -rf "$path"
+    else
+      git diff -- "$path" > "$QDIR/$path.diff"
+      git reset -q -- "$path" 2>/dev/null
+      git checkout -q -- "$path" 2>/dev/null || true
+    fi
+  done
+  echo "DEBRIS quarantined to $QDIR:"
+  printf '%s\n' "$DEBRIS"
+}
+
 # Tier 3 run ledger — metrics/ is gitignored so FAIL rows never dirty the gate.
 metrics_row() {  # $1 = result label
   mkdir -p metrics
@@ -39,6 +62,7 @@ Co-Authored-By: $MODEL (opencode) <noreply@opencode.ai>"
 
   if ! scripts/verify.sh "$BASE" "$TASK"; then
     metrics_row "FAIL-gate"
+    quarantine_debris
     escalate "gate failure on $TASK (see VERIFY FAIL above)"
   fi
   if git log -1 --format=%B | grep -q '^Opened:'; then
