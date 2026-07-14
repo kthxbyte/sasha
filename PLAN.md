@@ -24,7 +24,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [x] Task 3.1 — REPL dispatch
 - [x] Task 3.2 — Entry point & terminal wiring
 - [x] Task 3.3 — End-to-end smoke + README
-- [ ] Task 3.4 — REPL streaming passthrough (v1 review finding) ← current
+- [x] Task 3.4 — REPL streaming passthrough (v1 review finding)
 
 ## v2 (outline only — specced after v1 review)
 
