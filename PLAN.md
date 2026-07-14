@@ -20,7 +20,8 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 3 — REPL & product assembly
 
-- [ ] Task 3.1 — REPL dispatch ← current
+- [ ] Task 3.0 — Agent loop hardening (tool-turn liveness) ← current
+- [ ] Task 3.1 — REPL dispatch
 - [ ] Task 3.2 — Entry point & terminal wiring
 - [ ] Task 3.3 — End-to-end smoke + README
 
