@@ -45,6 +45,14 @@ Before the first dispatch, produce all of the following, in order:
 3. **PLAN.md** — phases with Task X.Y checkboxes, current task marked with `← current`, via **obra/superpowers:writing-plans**. Phases are escalation boundaries — size them so a phase is a coherent reviewable unit (3–6 tasks).
 4. **ISSUE-TRACKING.md** — issue tracker table (format below)
 5. **Repo skeleton** — directory layout, `.gitignore`, README stub, working toolchain (test runner, linter), `tests/contract/` directory, **`AGENTS.md`** (copy the template from `~/scaffolding/AGENTS.md` — executor instructions; opencode reads it before CLAUDE.md), and the Tier 2 scripts:
+   - `.gitignore` — must ignore, from commit one:
+     (a) **harness-local files**: `.claude/`, `.opencode/` — these appear at
+         unpredictable times (e.g. Claude Code writes `.claude/settings.local.json`
+         on every permission approval, possibly *mid-loop*) and would otherwise trip
+         the clean-tree gates: a spurious pre-dispatch escalation at best, a false
+         `verify.sh` failure against an innocent executor commit at worst;
+     (b) the language's **build/test artifacts** (Python: `__pycache__/`,
+         `*.py[cod]`, `.pytest_cache/`, `*.egg-info/`, `.venv/`, `dist/`, `build/`)
    - `scripts/verify.sh` — copy the template below verbatim
    - `scripts/verify.conf` — project-specific: `TEST_CMD`, `CONTRACT_TESTS`, optional `PROTECTED_PATHS`
    - `scripts/run-phase.sh` — generate per project from the loop algorithm below
