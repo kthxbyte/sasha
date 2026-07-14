@@ -17,6 +17,35 @@ never reaches `max_tool_turns` and the loop spins forever.
   was a known tool. Everything else (gate, result strings, identical-command
   detection, final tools-less round, §10 stopping line) is unchanged.
 
+## Fix sketch (authoritative — a previous attempt failed by keeping the stop
+## check inside the run_command-only branch)
+The current code ends the per-response processing with a block guarded by
+`if turn_has_tool_call:` — a flag set only when a `run_command` call was seen.
+That guard is the bug: for a response containing only unknown tool names the
+flag stays False, so the turn counter and the stop check are both skipped and
+the loop re-chats forever.
+
+Replace that entire block so it is guarded by the response itself:
+
+```python
+if response.tool_calls:                    # ANY tool-bearing turn counts
+    tool_turns += 1
+    if ((current_executed_command is not None
+            and current_executed_command == previous_command)
+            or tool_turns >= max_tool_turns):
+        out("[sasha] stopping: repeated identical command / tool-turn limit reached")
+        session.add_user("Answer in text now; no further commands will be run.")
+        final_messages = session.build_messages(executor.cwd)
+        final_response = client.chat(final_messages, tools=[], on_text=out)
+        session.add_assistant(final_response)
+        return
+    if current_executed_command is not None:
+        previous_command = current_executed_command
+```
+
+The `turn_has_tool_call` flag becomes unused and should be deleted. The stop
+check MUST run for every tool-bearing turn — that is the entire fix.
+
 ## Constraints
 - Modify `src/sasha/agent.py` only (plus optional tests under `tests/impl/`).
 - Do not touch: `scripts/`, `docs/superpowers/`, `CLAUDE.md`, `AGENTS.md`,
