@@ -94,7 +94,11 @@ def _repl(stub_url, script=None):
 
 
 def _out_text(chunks):
-    return "\n".join(chunks)
+    # Concatenate without separators: consult text arrives as STREAMED
+    # chunks (Task 3.4), and a "\n" join would split words across chunk
+    # boundaries. (Tier 1 amendment for ISSUE-013 — the original "\n".join
+    # forced implementations to buffer.)
+    return "".join(chunks)
 
 
 # --- AC1: explicit ask ------------------------------------------------------
