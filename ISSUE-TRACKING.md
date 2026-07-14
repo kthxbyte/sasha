@@ -11,6 +11,6 @@
 | ISSUE-007 | Task | Done | Normal | Task 2.2 — Session & context building | 2026-07-14 | 2026-07-14 |
 | ISSUE-008 | Task | Done | Normal | Task 2.3 — Agent loop with confirmation gate | 2026-07-14 | 2026-07-14 |
 | ISSUE-009 | Task | Done | Normal | Task 3.1 — REPL dispatch | 2026-07-14 | 2026-07-14 |
-| ISSUE-010 | Task | Open | Normal | Task 3.2 — Entry point & terminal wiring | 2026-07-14 | — |
+| ISSUE-010 | Task | Done | Normal | Task 3.2 — Entry point & terminal wiring | 2026-07-14 | 2026-07-14 |
 | ISSUE-011 | Task | Open | Normal | Task 3.3 — End-to-end smoke + README | 2026-07-14 | — |
 | ISSUE-012 | Task | Done | High | Task 3.0 — Agent loop hardening (tool-turn liveness) | 2026-07-14 | 2026-07-14 |
