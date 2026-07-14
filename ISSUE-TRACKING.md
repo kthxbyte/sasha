@@ -3,7 +3,7 @@
 | ID | Type | Status | Priority | Title | Discovered | Resolved |
 |---|---|---|---|---|---|---|
 | ISSUE-001 | Task | Done | Normal | Task 1.1 — Package skeleton + config module | 2026-07-14 | 2026-07-14 |
-| ISSUE-002 | Task | Open | Normal | Task 1.2 — Mute store | 2026-07-14 | — |
+| ISSUE-002 | Task | Done | Normal | Task 1.2 — Mute store | 2026-07-14 | 2026-07-14 |
 | ISSUE-003 | Task | Open | Normal | Task 1.3 — Executor core (subprocess, exit codes, side channel) | 2026-07-14 | — |
 | ISSUE-004 | Task | Open | Normal | Task 1.4 — Executor PTY tees (stderr always, stdout opt-in) | 2026-07-14 | — |
 | ISSUE-005 | Task | Open | Normal | Task 1.5 — Trigger engine | 2026-07-14 | — |
