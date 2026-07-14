@@ -44,7 +44,6 @@ def run_consult(
         if not response.tool_calls:
             return
 
-        turn_has_tool_call = False
         current_executed_command: str | None = None
 
         for call in response.tool_calls:
@@ -52,7 +51,6 @@ def run_consult(
                 session.add_tool_result(call.id, f"Unknown tool: {call.name}")
                 continue
 
-            turn_has_tool_call = True
             command = call.arguments.get("command", "")
             description = call.arguments.get("description", "")
             
@@ -75,16 +73,16 @@ def run_consult(
             
             session.add_tool_result(call.id, result_str)
 
-        if turn_has_tool_call:
+        if response.tool_calls:
             tool_turns += 1
-            
-            if (current_executed_command is not None and current_executed_command == previous_command) or (tool_turns >= max_tool_turns):
+            if ((current_executed_command is not None
+                    and current_executed_command == previous_command)
+                    or tool_turns >= max_tool_turns):
                 out("[sasha] stopping: repeated identical command / tool-turn limit reached")
                 session.add_user("Answer in text now; no further commands will be run.")
                 final_messages = session.build_messages(executor.cwd)
                 final_response = client.chat(final_messages, tools=[], on_text=out)
                 session.add_assistant(final_response)
                 return
-            
             if current_executed_command is not None:
                 previous_command = current_executed_command
