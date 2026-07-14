@@ -8,8 +8,8 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 1.1 — Package skeleton + config module
 - [x] Task 1.2 — Mute store
-- [ ] Task 1.3 — Executor core (subprocess, exit codes, side channel) ← current
-- [ ] Task 1.4 — Executor PTY tees (stderr always, stdout opt-in)
+- [x] Task 1.3 — Executor core (subprocess, exit codes, side channel)
+- [ ] Task 1.4 — Executor PTY tees (stderr always, stdout opt-in) ← current
 - [ ] Task 1.5 — Trigger engine
 
 ## Phase 2 — LLM plumbing (text answers end-to-end)
