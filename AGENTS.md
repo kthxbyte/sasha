@@ -41,11 +41,15 @@ Done: Task X.Y — <one-line description of what was implemented>
 Decided: <decision> — <rationale>        [optional, only if you made one]
 Deferred: <open question>                [optional]
 Next: Task X.Z — <description>           [REQUIRED — copy from the spec/plan]
+Co-Authored-By: <the exact line given in your dispatch prompt>
 ```
 
 Rules: first line is the title, then a blank line, then trailers. `Done:` and
 `Next:` are REQUIRED and must use the exact `Task N.N` format — they are parsed
-by scripts. One line per trailer. No other commentary in the message.
+by scripts. The `Co-Authored-By:` signature is REQUIRED as the last line, copied
+verbatim from your dispatch prompt — the gate rejects unsigned commits; it marks
+the commit as executor-generated. One line per trailer. No other commentary in
+the message.
 
 Example:
 
@@ -54,6 +58,7 @@ Task 3.1 — Backtest metrics module
 
 Done: Task 3.1 — Implemented Trade/Metrics pydantic models and compute_metrics
 Next: Task 3.2 — Backtest rules module
+Co-Authored-By: deepseek/deepseek-v4-pro (opencode) <noreply@opencode.ai>
 ```
 
 ## If you are blocked

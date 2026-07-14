@@ -5,7 +5,7 @@
 set -u
 cd "$(dirname "$0")/.."
 
-MODEL="deepseek/deepseek-v4-pro"
+MODEL="${SASHA_DISPATCH_MODEL:-deepseek/deepseek-v4-pro}"
 
 escalate() { echo "ESCALATE: $1"; exit 1; }
 
@@ -22,8 +22,11 @@ while true; do
   [ -n "$SPEC" ] || escalate "no task spec matching docs/superpowers/specs/task-${NUM}-*.md"
 
   BASE=$(git rev-parse HEAD)
-  echo "=== $TASK — dispatching $(basename "$SPEC") on base ${BASE:0:12} ==="
-  opencode run --model "$MODEL" "$(realpath "$SPEC")"
+  echo "=== $TASK — dispatching $(basename "$SPEC") on base ${BASE:0:12} via $MODEL ==="
+  opencode run --model "$MODEL" "$(realpath "$SPEC")
+
+Sign your commit with exactly this trailer as the last line:
+Co-Authored-By: $MODEL (opencode) <noreply@opencode.ai>"
 
   scripts/verify.sh "$BASE" "$TASK" || escalate "gate failure on $TASK (see VERIFY FAIL above)"
   git log -1 --format=%B | grep -q '^Opened:' && escalate "issue opened during $TASK (see last commit)"

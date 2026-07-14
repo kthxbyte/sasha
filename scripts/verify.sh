@@ -21,6 +21,8 @@ echo "$MSG" | grep -qE "^Done: ${TASK//./\\.} — " \
   || fail trailer "missing 'Done: $TASK — <description>'"
 echo "$MSG" | grep -qE "^Next: Task [0-9]+\.[0-9]+ — " \
   || fail trailer "missing valid 'Next: Task N.N — <description>'"
+echo "$MSG" | grep -qE "^Co-Authored-By: " \
+  || fail trailer "missing 'Co-Authored-By:' executor signature (see AGENTS.md)"
 
 # 3. Contract tests untouched — the implementer may never edit the contract
 TOUCHED=$(git diff --name-only "$BASE"..HEAD -- $CONTRACT_TESTS)

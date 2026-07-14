@@ -22,8 +22,16 @@
 ## Dispatch Command
 
 ```bash
-opencode run --model deepseek/deepseek-v4-pro "<absolute path to task spec>"
+opencode run --model "$MODEL" "<absolute path to task spec>
+Sign your commit with exactly this trailer as the last line:
+Co-Authored-By: $MODEL (opencode) <noreply@opencode.ai>"
 ```
+
+`MODEL="${SASHA_DISPATCH_MODEL:-deepseek/deepseek-v4-pro}"` — the default
+executor is deepseek-v4-pro; export `SASHA_DISPATCH_MODEL` before launching
+`run-phase.sh` to dispatch with a different executor (e.g. a local model) with
+no script edit. The signature line travels in the dispatch prompt so it always
+names the model that actually ran.
 
 ## Escalation Points — when Tier 1 gets pulled back in
 
@@ -67,7 +75,7 @@ The skeleton must be a working harness: `scripts/verify.sh <base> "Task 1.1"` mu
 ```
 1. TASK  = task marked `← current` in PLAN.md
 2. BASE  = git rev-parse HEAD
-3. opencode run --model deepseek/deepseek-v4-pro "<task spec path>"      # implement
+3. opencode run --model "$MODEL" "<task spec path + signature line>"     # implement
 4. scripts/verify.sh "$BASE" "$TASK"           || exit 1  # ESCALATE: gate failure
 5. git log -1 --format=%B | grep -q "^Opened:" && exit 1  # ESCALATE: issue opened
 6. tracking commit (deterministic, sed-driven):
@@ -109,6 +117,8 @@ echo "$MSG" | grep -qE "^Done: ${TASK//./\\.} — " \
   || fail trailer "missing 'Done: $TASK — <description>'"
 echo "$MSG" | grep -qE "^Next: Task [0-9]+\.[0-9]+ — " \
   || fail trailer "missing valid 'Next: Task N.N — <description>'"
+echo "$MSG" | grep -qE "^Co-Authored-By: " \
+  || fail trailer "missing 'Co-Authored-By:' executor signature (see AGENTS.md)"
 
 # 3. Contract tests untouched — the implementer may never edit the contract
 TOUCHED=$(git diff --name-only "$BASE"..HEAD -- $CONTRACT_TESTS)
@@ -182,6 +192,7 @@ Opened: ISSUE-NNN (discovered during Task X.Y)
 Decided: <decision> — <rationale>
 Deferred: <open question>
 Next: Task X.Z — <description>
+Co-Authored-By: <executor signature — exact line pinned in AGENTS.md>
 ```
 
 ### Rules
@@ -198,6 +209,15 @@ Next: Task X.Z — <description>
 8. **`Next:`** — REQUIRED. Must point to the next task in the plan.
 9. **Use exact task and issue IDs** — scripts parse these mechanically (see verify.sh)
 10. **No extra commentary** — machine-readable, not a human changelog
+11. **Every commit is signed by its author tier** — commit provenance at a glance:
+    - Task commits (Tier 3) end with the executor's `Co-Authored-By:` line,
+      supplied verbatim in the dispatch prompt by run-phase.sh (so it names
+      the model that actually ran, even under `SASHA_DISPATCH_MODEL`
+      overrides) and enforced by verify.sh
+    - Tier 1 commits (specs, bootstrap, contract fixes) end with
+      `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
+    - Tracking commits (Tier 2) carry NO signature — deterministic script
+      output; their `Track Task N.N` title is the provenance marker
 
 ### Examples
 
@@ -206,6 +226,7 @@ Task 3.1 — Backtest metrics module
 
 Done: Task 3.1 — Implemented Trade/Metrics pydantic models and compute_metrics
 Next: Task 3.2 — Backtest rules module
+Co-Authored-By: deepseek-v4-pro (opencode) <noreply@deepseek.com>
 ```
 
 ```
@@ -215,6 +236,7 @@ Done: Task 4.1 — Implemented receive_frame/send_frame with CRC-8 verification
 Decided: Use CRC-8 polynomial 0x07 for framing (matches StromatoliteDB spec §6.1) — consistency with existing protocol
 Deferred: On-hardware baud rate validation needs real serial port
 Next: Task 4.2 — Command parser and verb binding
+Co-Authored-By: deepseek-v4-pro (opencode) <noreply@deepseek.com>
 ```
 
 ## Task Granularity
