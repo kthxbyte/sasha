@@ -46,7 +46,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 8 — write_line() missing-newline fix (ISSUE-024)
 
-- [ ] Task 8.1 — write_line() closes a dangling unterminated line before printing ← current
+- [x] Task 8.1 — write_line() closes a dangling unterminated line before printing
 
 ## v2 (outline only — specced after v1 review)
 
