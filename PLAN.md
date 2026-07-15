@@ -33,11 +33,11 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 5 — Quick wins (ISSUE-017 / ISSUE-020)
 
 - [x] Task 5.1 — Drop redundant AUTO_CONSULT preamble on exit 127
-- [ ] Task 5.2 — "Thinking" indicator during LLM consult ← current
+- [x] Task 5.2 — "Thinking" indicator during LLM consult
 
 ## Phase 6 — Output sink redesign (ISSUE-014 / ISSUE-018 / ISSUE-019)
 
-- [ ] Task 6.1 — Sink protocol + TerminalSink (structural; ISSUE-014/018)
+- [ ] Task 6.1 — Sink protocol + TerminalSink (structural; ISSUE-014/018) ← current
 - [ ] Task 6.2 — Colorization + user@host prompt (ISSUE-019)
 
 ## v2 (outline only — specced after v1 review)
