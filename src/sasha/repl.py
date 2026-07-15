@@ -24,6 +24,7 @@ class Repl:
     def _consult(self, auto_prompt=None):
         if auto_prompt:
             self._session.add_user(auto_prompt)
+        self._out("[sasha] thinking…")
         try:
             client = self._client_factory(self._current_profile)
             def stream_out(text):
