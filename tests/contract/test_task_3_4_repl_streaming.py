@@ -71,12 +71,16 @@ def _repl(stub_url, events):
 
 
 def test_ac1_chunks_stream_through():
+    # Task 5.2 (ISSUE-020) added a "[sasha] thinking…" out() call at the
+    # start of every _consult — filtered out here by exact match since it's
+    # not part of the streamed answer text this AC is about.
     events = []
     with StubServer([{"kind": "text",
                       "text": "a reasonably long streamed answer",
                       "chunk_size": 4}]) as stub:
         _repl(stub.base_url, events).run_once("?? tell me")
-    out_chunks = [c for kind, c in events if kind == "out"]
+    out_chunks = [c for kind, c in events
+                  if kind == "out" and c != "[sasha] thinking…"]
     assert len(out_chunks) >= 2, "text must stream through as multiple out() calls"
     assert "".join(out_chunks) == "a reasonably long streamed answer"
 
