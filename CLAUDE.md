@@ -24,7 +24,7 @@
 ```bash
 opencode run --model "$MODEL" "<absolute path to task spec>
 Sign your commit with exactly this trailer as the last line:
-Co-Authored-By: $MODEL (opencode) <noreply@opencode.ai>"
+Co-Authored-By: $MODEL (opencode) <noreply@opencode.ai>" < /dev/null
 ```
 
 `MODEL="${SASHA_DISPATCH_MODEL:-deepseek/deepseek-v4-pro}"` — the default
@@ -32,6 +32,15 @@ executor is deepseek-v4-pro; export `SASHA_DISPATCH_MODEL` before launching
 `run-phase.sh` to dispatch with a different executor (e.g. a local model) with
 no script edit. The signature line travels in the dispatch prompt so it always
 names the model that actually ran.
+
+**`< /dev/null` is required, not optional** (added 2026-07-15 after
+Task 8.1's dispatch hung twice, reproducibly, in a sandboxed shell with no
+stdin attached — see `docs/superpowers/DISPATCH-INCIDENTS.md`). Without it,
+`opencode run` can block indefinitely on an unclosed stdin before ever
+logging its first model call — clean bootstrap, zero CPU churn, zero
+network activity, no error, just silence. A direct `curl` to the
+provider's API with the same key answered in under 2 seconds both times
+this happened, ruling out the provider/network/auth as the cause.
 
 **Executor routing (Salvador's standing rule, 2026-07-14):** classify each
 task at spec-writing time. *Greenfield* tasks — a new module built against

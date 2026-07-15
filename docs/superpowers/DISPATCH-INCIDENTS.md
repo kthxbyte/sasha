@@ -91,3 +91,19 @@ future improvement to the dispatch tooling — should know about.
   prompt content).
 - **Resolution:** proceeding to retry #2 with `< /dev/null` appended to
   the dispatch command.
+
+### 2026-07-15 — Task 8.1 (retry 2) — `< /dev/null` resolved it, confirmed root cause
+
+- **Resolution:** re-ran the identical dispatch with `< /dev/null` added
+  to the `opencode run` invocation. It streamed immediately — read the
+  issue file and `repl.py`, ran the contract suite, edited `write_line`,
+  reran the full suite (169 passed), committed `250e8b5` with the correct
+  trailers — all within under a minute, no `timeout` needed.
+- **Root cause confirmed:** `opencode run` blocks indefinitely on an
+  unclosed stdin in this sandboxed shell when none is supplied. CLAUDE.md's
+  Dispatch Command template needs `< /dev/null` added permanently — every
+  prior successful dispatch in this project's history (Tasks 1.1 through
+  7.1) was launched by whatever shell/session ran it at the time; this is
+  the first time the exact invocation environment reproduced the hang
+  twice in a row, so the fix belongs in the standing command, not as a
+  one-off workaround.
