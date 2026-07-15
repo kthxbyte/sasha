@@ -24,4 +24,4 @@
 | ISSUE-020 | Issue | Done | Low | Missing 'thinking' indicator during LLM queries | 2026-07-14 | 2026-07-15 |
 | ISSUE-021 | Task | Done | High | Task 4.1 — Job control handoff (tcsetpgrp, Ctrl+Z termination, TUI passthrough) | 2026-07-14 | 2026-07-14 |
 | ISSUE-022 | Issue | Open | Low | Configurable prompt — bash $PS1-style convention (design note only, not specced) | 2026-07-15 | — |
-| ISSUE-023 | Issue | Open | Low | Confirmation gate — distinct colors per line (command / description / prompt) | 2026-07-15 | — |
+| ISSUE-023 | Issue | Done | Low | Confirmation gate — distinct colors per line (command / description / prompt) | 2026-07-15 | 2026-07-15 |

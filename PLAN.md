@@ -42,7 +42,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 7 — Confirmation gate colorization (ISSUE-023)
 
-- [ ] Task 7.1 — Per-line colors for the confirmation gate ← current
+- [x] Task 7.1 — Per-line colors for the confirmation gate
 
 ## v2 (outline only — specced after v1 review)
 
