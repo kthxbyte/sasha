@@ -40,7 +40,11 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [x] Task 6.1 — Sink protocol + TerminalSink (structural; ISSUE-014/018)
 - [x] Task 6.2 — Colorization + user@host prompt (ISSUE-019)
 
+## Phase 7 — Confirmation gate colorization (ISSUE-023)
+
+- [ ] Task 7.1 — Per-line colors for the confirmation gate ← current
+
 ## v2 (outline only — specced after v1 review)
 
-- Phase 7 — Multi-tool registry & per-tool permissions
-- Phase 8 — Session persistence & resume
+- Phase 8 — Multi-tool registry & per-tool permissions
+- Phase 9 — Session persistence & resume
