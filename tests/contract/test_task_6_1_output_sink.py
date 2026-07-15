@@ -6,14 +6,24 @@ Design: docs/superpowers/specs/2026-07-15-sasha-v2-output-sink-design.md §4, §
 
 Task 6.1 delivers the Sink protocol, TerminalSink's write_line/write_chunk/
 ensure_newline mechanics, and the color_enabled flag's correct computation —
-all producing PLAIN, uncolored text. Actual color wrapping is Task 6.2; do
-not expect ANSI codes here.
+all producing PLAIN, uncolored text at the time this task lands. Actual
+color wrapping is Task 6.2.
 
 Repl/TerminalConfirmer routing through the sink (rather than a bare out()
 callable) is exercised by the amended existing files: test_task_3_1_repl.py,
 test_task_3_4_repl_streaming.py, test_task_4_1_job_control.py,
 test_task_5_1_drop_127_preamble.py, test_task_5_2_thinking_indicator.py —
 not duplicated here.
+
+Tier 1 amendment (Task 6.2 spec time): the original AC5 test asserted
+write_line() is *never* color-wrapped, even with color_enabled=True. That
+was correct for Task 6.1's own scope but is directly superseded by Task
+6.2's deliverable (colored write_line) and would permanently red the full
+contract suite (scripts/run-tests.sh includes every done-or-current task's
+file) from Task 6.2 onward. Retired rather than left to rot red — see
+docs/superpowers/specs/task-6.2-colorization-prompt.md's Decided: entry.
+AC1-AC4 are unaffected: they all pin behavior under isatty=False (plain
+output), which is unchanged by Task 6.2.
 """
 
 import sys
@@ -102,12 +112,3 @@ def test_ac4_color_disabled_when_no_color_set(monkeypatch, capsys):
     sink = _make_sink(monkeypatch, isatty=True, no_color="1")
     capsys.readouterr()
     assert sink.color_enabled is False
-
-
-# --- AC5: Task 6.1 output is plain — no ANSI wrapping yet (that's 6.2) ------
-
-def test_ac5_write_line_unwrapped_even_when_color_enabled(monkeypatch, capsys):
-    sink = _make_sink(monkeypatch, isatty=True, no_color=None)
-    assert sink.color_enabled is True
-    sink.write_line("[sasha] hello")
-    assert capsys.readouterr().out == "[sasha] hello\n"

@@ -344,7 +344,10 @@ existing files listed below — all already committed with this spec)
    and `NO_COLOR` is absent from the environment — `test_ac4_*`.
 5. `TerminalSink.write_line`/`write_chunk` never wrap output in ANSI codes
    in this task, even when `color_enabled` is `True` —
-   `test_ac5_write_line_unwrapped_even_when_color_enabled`.
+   `test_ac5_write_line_unwrapped_even_when_color_enabled`. **(Retired at
+   Task 6.2 spec time — see that task's Decided: entry. Its premise, "no
+   color yet," is inherently a Task-6.1-only transitional statement that
+   Task 6.2 legitimately supersedes; kept red permanently otherwise.)**
 6. Every existing `Repl`/`TerminalConfirmer` contract test still passes
    using the new `sink=` constructor argument: `test_task_3_1_repl.py`,
    `test_task_3_4_repl_streaming.py`, `test_task_4_1_job_control.py`,
