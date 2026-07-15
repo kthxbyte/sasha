@@ -160,12 +160,7 @@ class Repl:
 
         decision = decide(stripped, result, self._mutes)
         if decision == Decision.AUTO_CONSULT:
-            prompt = (f"The line `{stripped}` failed with exit 127 "
-                      f"(command not found, or not a command at all). "
-                      f"If it was meant as a question or calculation, "
-                      f"answer it; if it looks like a typo, say so "
-                      f"and give the corrected command.")
-            self._consult(prompt)
+            self._consult()
         elif decision == Decision.OFFER:
             self._out(f"[sasha] failed (exit {result.exit_code}) "
                       f"— press Enter to ask")
