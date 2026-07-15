@@ -1,5 +1,7 @@
+import getpass
 import os
 import shlex
+import socket
 import sys
 from typing import Protocol
 
@@ -185,13 +187,22 @@ class Repl:
 
     def loop(self):
         home = os.path.expanduser("~")
+        user = getpass.getuser()
+        host = socket.gethostname()
+        color_enabled = self._sink.color_enabled
         while True:
             cwd = self._executor.cwd
             if cwd.startswith(home):
                 display_cwd = "~" + cwd[len(home):]
             else:
                 display_cwd = cwd
-            prompt = f"{display_cwd} ✦ "
+            raw_prompt = f"{user}@{host}:{display_cwd} ✦ "
+            if color_enabled:
+                prompt = (f"{_RL_IGNORE_START}{_PROMPT_COLOR}{_RL_IGNORE_END}"
+                          f"{raw_prompt}"
+                          f"{_RL_IGNORE_START}{_RESET}{_RL_IGNORE_END}")
+            else:
+                prompt = raw_prompt
             try:
                 line = self._input_fn(prompt)
             except EOFError:
@@ -224,25 +235,49 @@ class TerminalConfirmer:
             return ("reply", response)
 
 
+_SASHA_COLOR = "\x1b[36m"   # cyan
+_LLM_COLOR = "\x1b[35m"     # magenta
+_PROMPT_COLOR = "\x1b[32m"  # green
+_RESET = "\x1b[0m"
+_RL_IGNORE_START = "\001"
+_RL_IGNORE_END = "\002"
+
+
 class TerminalSink:
     def __init__(self) -> None:
         self.color_enabled = (sys.stdout.isatty()
                               and "NO_COLOR" not in os.environ)
         self._ends_in_newline = True
+        self._chunk_run_open = False
+
+    def _wrap(self, text: str, color: str) -> str:
+        if not self.color_enabled:
+            return text
+        return f"{color}{text}{_RESET}"
+
+    def _close_chunk_run(self) -> None:
+        if self._chunk_run_open:
+            sys.stdout.write(_RESET)
+            self._chunk_run_open = False
 
     def write_line(self, text: str) -> None:
-        print(text)
+        self._close_chunk_run()
+        print(self._wrap(text, _SASHA_COLOR))
         self._ends_in_newline = True
 
     def write_chunk(self, text: str) -> None:
         if not text:
             return
+        if self.color_enabled and not self._chunk_run_open:
+            sys.stdout.write(_LLM_COLOR)
+            self._chunk_run_open = True
         sys.stdout.write(text)
         sys.stdout.flush()
         self._ends_in_newline = text.endswith("\n")
 
     def ensure_newline(self) -> None:
+        self._close_chunk_run()
         if not self._ends_in_newline:
             sys.stdout.write("\n")
-            sys.stdout.flush()
             self._ends_in_newline = True
+        sys.stdout.flush()
