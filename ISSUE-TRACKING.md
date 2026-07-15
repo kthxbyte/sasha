@@ -23,3 +23,4 @@
 | ISSUE-019 | Issue | Done | Low | Enhanced shell prompt and terminal colorization | 2026-07-14 | 2026-07-15 |
 | ISSUE-020 | Issue | Done | Low | Missing 'thinking' indicator during LLM queries | 2026-07-14 | 2026-07-15 |
 | ISSUE-021 | Task | Done | High | Task 4.1 — Job control handoff (tcsetpgrp, Ctrl+Z termination, TUI passthrough) | 2026-07-14 | 2026-07-14 |
+| ISSUE-022 | Issue | Open | Low | Configurable prompt — bash $PS1-style convention (design note only, not specced) | 2026-07-15 | — |
