@@ -32,8 +32,8 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 5 — Quick wins (ISSUE-017 / ISSUE-020)
 
-- [ ] Task 5.1 — Drop redundant AUTO_CONSULT preamble on exit 127 ← current
-- [ ] Task 5.2 — "Thinking" indicator during LLM consult
+- [x] Task 5.1 — Drop redundant AUTO_CONSULT preamble on exit 127
+- [ ] Task 5.2 — "Thinking" indicator during LLM consult ← current
 
 ## Phase 6 — Output sink redesign (ISSUE-014 / ISSUE-018 / ISSUE-019)
 
