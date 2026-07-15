@@ -15,7 +15,7 @@
 | ISSUE-011 | Task | Done | Normal | Task 3.3 — End-to-end smoke + README | 2026-07-14 | 2026-07-14 |
 | ISSUE-012 | Task | Done | High | Task 3.0 — Agent loop hardening (tool-turn liveness) | 2026-07-14 | 2026-07-14 |
 | ISSUE-013 | Task | Done | High | Task 3.4 — REPL streaming passthrough (v1 review finding) | 2026-07-14 | 2026-07-14 |
-| ISSUE-014 | Issue | Open | Normal | out() conflates lines and stream chunks — repl hardcodes sys.stdout + a print identity check; redesign sink at v2 | 2026-07-14 | — |
+| ISSUE-014 | Issue | Done | Normal | out() conflates lines and stream chunks — repl hardcodes sys.stdout + a print identity check; redesign sink at v2 | 2026-07-14 | 2026-07-15 |
 | ISSUE-015 | Issue | Done | High | REPL blocking on synchronous command execution (e.g. 'yes') | 2026-07-14 | 2026-07-14 |
 | ISSUE-016 | Issue | Done | High | TUI programs (vi, mc, etc.) do not display correctly (best effort — mechanism fixed, visual rendering not contract-tested) | 2026-07-14 | 2026-07-14 |
 | ISSUE-017 | Issue | Done | Low | Redundant LLM explanation on 'command not found' (exit 127) | 2026-07-14 | 2026-07-15 |
