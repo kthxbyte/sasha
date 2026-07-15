@@ -28,7 +28,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 4 — Job control (ISSUE-015 / ISSUE-016)
 
-- [ ] Task 4.1 — tcsetpgrp handoff, Ctrl+Z termination, TUI passthrough ← current
+- [x] Task 4.1 — tcsetpgrp handoff, Ctrl+Z termination, TUI passthrough
 
 ## v2 (outline only — specced after v1 review; numbering/sequencing among
 ## ISSUE-014/017/018/019/020 and these phases still to be decided)
