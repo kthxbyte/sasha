@@ -23,7 +23,8 @@ def _make_sink(monkeypatch, isatty=True, no_color=None):
 # --- AC1: write_line colored when enabled, plain when not -------------------
 # write_line also closes any chunk run left open by a preceding write_chunk
 # streak, so switching from streamed LLM text to a [sasha] line never leaves
-# a dangling, unterminated color code.
+# a dangling, unterminated color code. Task 8.1 (ISSUE-024) additionally
+# makes write_line insert the missing separating newline in that case.
 
 def test_ac1_write_line_colored_when_enabled(monkeypatch, capsys):
     from sasha.repl import _RESET, _SASHA_COLOR
@@ -46,7 +47,7 @@ def test_ac1_write_line_closes_open_chunk_run(monkeypatch, capsys):
     sink.write_chunk("partial")
     sink.write_line("done")
     assert (capsys.readouterr().out
-            == f"{_LLM_COLOR}partial{_RESET}{_SASHA_COLOR}done{_RESET}\n")
+            == f"{_LLM_COLOR}partial{_RESET}\n{_SASHA_COLOR}done{_RESET}\n")
 
 
 # --- AC2: write_chunk opens one color run per contiguous streak, not one ----

@@ -44,7 +44,11 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 7.1 — Per-line colors for the confirmation gate
 
+## Phase 8 — write_line() missing-newline fix (ISSUE-024)
+
+- [ ] Task 8.1 — write_line() closes a dangling unterminated line before printing ← current
+
 ## v2 (outline only — specced after v1 review)
 
-- Phase 8 — Multi-tool registry & per-tool permissions
-- Phase 9 — Session persistence & resume
+- Phase 9 — Multi-tool registry & per-tool permissions
+- Phase 10 — Session persistence & resume

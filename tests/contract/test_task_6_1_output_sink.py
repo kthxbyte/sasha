@@ -86,12 +86,14 @@ def test_ac3_ensure_newline_noop_before_any_write(monkeypatch, capsys):
 
 
 def test_ac3_write_line_after_chunk_still_tracked(monkeypatch, capsys):
-    # write_line always ends True regardless of what preceded it.
+    # write_line always ends True regardless of what preceded it, and (Task
+    # 8.1, ISSUE-024) closes a dangling unterminated line before printing
+    # its own text, same as ensure_newline already does.
     sink = _make_sink(monkeypatch, isatty=False)
     sink.write_chunk("partial")
     sink.write_line("complete")
     sink.ensure_newline()
-    assert capsys.readouterr().out == "partialcomplete\n"
+    assert capsys.readouterr().out == "partial\ncomplete\n"
 
 
 # --- AC4: color_enabled reflects isatty() and NO_COLOR -----------------------
