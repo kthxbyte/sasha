@@ -36,7 +36,9 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [ ] Task 5.2 — "Thinking" indicator during LLM consult
 
 ## Phase 6 — Output sink redesign (ISSUE-014 / ISSUE-018 / ISSUE-019)
-(outline only — not yet specced; needs its own brainstorming design pass)
+
+- [ ] Task 6.1 — Sink protocol + TerminalSink (structural; ISSUE-014/018)
+- [ ] Task 6.2 — Colorization + user@host prompt (ISSUE-019)
 
 ## v2 (outline only — specced after v1 review)
 
