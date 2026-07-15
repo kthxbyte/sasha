@@ -220,9 +220,15 @@ class TerminalConfirmer:
 
     def ask(self, command, description):
         desc = description if description else "(no description provided)"
-        self._sink.write_line(f"[sasha] wants to run:  {command}\n"
-                  f"        └ {desc}\n"
-                  f"        [y]es / [n]o / [e]dit — or type a reply")
+        if self._sink.color_enabled:
+            text = (f"{_COMMAND_COLOR}[sasha] wants to run:  {command}{_RESET}\n"
+                    f"{_DIM}        └ {desc}{_RESET}\n"
+                    f"{_PROMPT_COLOR}        [y]es / [n]o / [e]dit — or type a reply{_RESET}")
+        else:
+            text = (f"[sasha] wants to run:  {command}\n"
+                    f"        └ {desc}\n"
+                    f"        [y]es / [n]o / [e]dit — or type a reply")
+        self._sink.write_line(text)
         response = self._input_fn("> ").strip()
         if response in ("y", "yes"):
             return ("yes", "")
@@ -238,6 +244,8 @@ class TerminalConfirmer:
 _SASHA_COLOR = "\x1b[36m"   # cyan
 _LLM_COLOR = "\x1b[35m"     # magenta
 _PROMPT_COLOR = "\x1b[32m"  # green
+_COMMAND_COLOR = "\x1b[33m"  # yellow — the literal command about to run
+_DIM = "\x1b[2m"             # faint — secondary/explanatory text
 _RESET = "\x1b[0m"
 _RL_IGNORE_START = "\001"
 _RL_IGNORE_END = "\002"
