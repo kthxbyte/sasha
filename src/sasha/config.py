@@ -43,8 +43,8 @@ _DEFAULT_PROFILE_FIELDS_BY_NAME = {
         "api_key": "",
     },
     "local": {
-        "base_url": "http://192.168.8.253:11434/v1",
-        "model": "unsloth/gemma-4-26B-A4B-it-qat-GGUF:UD-Q4_K_XL",
+        "base_url": "http://192.168.8.253:11441/v1",
+        "model": "local",
         "api_key_env": "",
         "api_key": "",
     },
