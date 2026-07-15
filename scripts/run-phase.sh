@@ -74,7 +74,14 @@ Co-Authored-By: $MODEL (opencode) <noreply@opencode.ai>"
   # ---- tracking commit (deterministic, sed-driven) ----
   TODAY=$(date +%F)
   sed -i "s/^- \[ \] \(Task ${NUM_ESC} — .*\) ← current\$/- [x] \1/" PLAN.md
-  sed -i "/Task ${NUM_ESC} —/{s/| Open |/| Done |/; s/| — |\$/| ${TODAY} |/}" ISSUE-TRACKING.md
+  # Mark every ISSUE-NNN this task's commit declares Fixed:, by ID — not by
+  # matching "Task N.N —" in the Title column, which only works for the rare
+  # Task-type row whose Title happens to embed the task number. Most rows
+  # (Issue-type, discovered from a write-up) use a descriptive title instead
+  # and would otherwise silently stay "Open" forever.
+  for ISSUE_ID in $(git log -1 --format=%B | grep -oE '^Fixed: ISSUE-[0-9]+' | grep -oE 'ISSUE-[0-9]+'); do
+    sed -i "/^| ${ISSUE_ID} /{s/| Open |/| Done |/; s/| — |\$/| ${TODAY} |/}" ISSUE-TRACKING.md
+  done
 
   NEXT=$(grep -m1 -oE '^- \[ \] Task [0-9]+\.[0-9]+' PLAN.md | grep -oE '[0-9]+\.[0-9]+' || true)
   if [ -n "$NEXT" ]; then
