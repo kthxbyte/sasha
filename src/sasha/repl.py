@@ -154,6 +154,10 @@ class Repl:
         result = self._executor.run(stripped)
         self._session.note_command(stripped, result)
 
+        if result.ctrl_z_terminated:
+            self._out("[sasha] Ctrl+Z not supported — command terminated")
+            return True
+
         decision = decide(stripped, result, self._mutes)
         if decision == Decision.AUTO_CONSULT:
             prompt = (f"The line `{stripped}` failed with exit 127 "
