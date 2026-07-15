@@ -25,3 +25,4 @@
 | ISSUE-021 | Task | Done | High | Task 4.1 — Job control handoff (tcsetpgrp, Ctrl+Z termination, TUI passthrough) | 2026-07-14 | 2026-07-14 |
 | ISSUE-022 | Issue | Open | Low | Configurable prompt — bash $PS1-style convention (design note only, not specced) | 2026-07-15 | — |
 | ISSUE-023 | Issue | Done | Low | Confirmation gate — distinct colors per line (command / description / prompt) | 2026-07-15 | 2026-07-15 |
+| ISSUE-024 | Issue | Open | Normal | TerminalSink.write_line() doesn't call ensure_newline() — mid-consult write_line (e.g. confirmation gate) runs onto an open streamed line | 2026-07-15 | — |
