@@ -270,6 +270,8 @@ class TerminalSink:
 
     def write_line(self, text: str) -> None:
         self._close_chunk_run()
+        if not self._ends_in_newline:
+            sys.stdout.write("\n")
         print(self._wrap(text, _SASHA_COLOR))
         self._ends_in_newline = True
 
