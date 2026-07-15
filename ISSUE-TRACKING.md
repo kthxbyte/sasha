@@ -19,7 +19,7 @@
 | ISSUE-015 | Issue | Done | High | REPL blocking on synchronous command execution (e.g. 'yes') | 2026-07-14 | 2026-07-14 |
 | ISSUE-016 | Issue | Done | High | TUI programs (vi, mc, etc.) do not display correctly (best effort — mechanism fixed, visual rendering not contract-tested) | 2026-07-14 | 2026-07-14 |
 | ISSUE-017 | Issue | Done | Low | Redundant LLM explanation on 'command not found' (exit 127) | 2026-07-14 | 2026-07-15 |
-| ISSUE-018 | Issue | Open | Low | LLM output missing trailing newline causes prompt discontinuity | 2026-07-14 | — |
+| ISSUE-018 | Issue | Done | Low | LLM output missing trailing newline causes prompt discontinuity | 2026-07-14 | 2026-07-15 |
 | ISSUE-019 | Issue | Done | Low | Enhanced shell prompt and terminal colorization | 2026-07-14 | 2026-07-15 |
 | ISSUE-020 | Issue | Done | Low | Missing 'thinking' indicator during LLM queries | 2026-07-14 | 2026-07-15 |
 | ISSUE-021 | Task | Done | High | Task 4.1 — Job control handoff (tcsetpgrp, Ctrl+Z termination, TUI passthrough) | 2026-07-14 | 2026-07-14 |

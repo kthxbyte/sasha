@@ -79,7 +79,7 @@ Co-Authored-By: $MODEL (opencode) <noreply@opencode.ai>"
   # Task-type row whose Title happens to embed the task number. Most rows
   # (Issue-type, discovered from a write-up) use a descriptive title instead
   # and would otherwise silently stay "Open" forever.
-  for ISSUE_ID in $(git log -1 --format=%B | grep -oE '^Fixed: ISSUE-[0-9]+' | grep -oE 'ISSUE-[0-9]+'); do
+  for ISSUE_ID in $(git log -1 --format=%B | grep -E '^Fixed: ' | grep -oE 'ISSUE-[0-9]+'); do
     sed -i "/^| ${ISSUE_ID} /{s/| Open |/| Done |/; s/| — |\$/| ${TODAY} |/}" ISSUE-TRACKING.md
   done
 
