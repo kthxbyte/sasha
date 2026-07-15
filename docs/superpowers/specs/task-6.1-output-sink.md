@@ -352,7 +352,8 @@ existing files listed below — all already committed with this spec)
    using the new `sink=` constructor argument: `test_task_3_1_repl.py`,
    `test_task_3_4_repl_streaming.py`, `test_task_4_1_job_control.py`,
    `test_task_5_1_drop_127_preamble.py`, `test_task_5_2_thinking_indicator.py`
-   (all already amended — this is the ISSUE-014/018 fix landing).
+   (Tier 1-amended immediately before this task's own dispatch — see the
+   correction below — this is the ISSUE-014/018 fix landing).
 
 ## Standing instructions
 - Your goal: make the full contract suite pass:
@@ -360,9 +361,26 @@ existing files listed below — all already committed with this spec)
   (every task done or current per `PLAN.md` — this task's own tests plus
   every existing file must be green together).
 - NEVER modify files under `tests/contract/` — the gate rejects the commit
-  if you do. The 5 existing files listed above were already amended by
-  Tier 1 at spec time specifically so this task's dispatch doesn't need to
-  (and must not) touch them.
+  if you do. The 5 existing files listed above carry a Tier 1 amendment
+  (SpySink instead of a bare `out` callable) that this task's dispatch
+  must NOT touch — it is already in place by the time this task starts.
+
+**Correction (logged when Task 5.1 was dispatched and escalated):** this
+spec originally amended the 5 existing files at spec-commit time (`ce298f9`),
+far ahead of Task 5.1/5.2 actually landing. Since `scripts/run-tests.sh`
+selects every done-or-current task's file — not just this task's own — that
+broke the gate for Task 5.1 immediately: the amendments assume the `Sink`
+interface this task introduces, but the actually-landed code at that point
+still used the old bare `out` callable. Deepseek correctly refused to guess
+and escalated rather than touch `tests/contract/`. Fix: the amendments were
+reverted to their pre-`ce298f9` (bare-callable) state so Task 5.1/5.2 could
+dispatch against the interface that actually exists, and are re-applied by
+Tier 1 as a dedicated commit immediately before *this* task (Task 6.1)
+dispatches — not before. See the fix commit's trailer for detail. General
+rule going forward: a task's blast-radius test amendments to *other* tasks'
+files land with that task's own spec commit only if those other tasks are
+already done; if they're still pending, the amendment is deferred and
+applied right before the interface-changing task's own dispatch.
 - Deliver exactly ONE new commit on top of the HEAD you started from; never
   amend, rebase, or reset; leave the working tree clean.
 - Commit message per AGENTS.md, with trailers:

@@ -166,26 +166,6 @@ class _SpyMutes:
         raise AssertionError("trigger engine must not run for a ctrl_z_terminated result")
 
 
-class _SpySink:
-    """Sink test double (Task 6.1) — no coloring, raw text captured."""
-
-    color_enabled = False
-
-    def __init__(self, events):
-        self._events = events
-
-    def write_line(self, text):
-        self._events.append(text)
-
-    def write_chunk(self, text):
-        if text:
-            self._events.append(text)
-
-    def ensure_newline(self):
-        if self._events and not self._events[-1].endswith("\n"):
-            self._events.append("\n")
-
-
 def test_ac5_repl_prints_ctrl_z_message_and_skips_triggers():
     from sasha.config import Config, Limits, Profile
     from sasha.executor import ExecResult
@@ -201,7 +181,7 @@ def test_ac5_repl_prints_ctrl_z_message_and_skips_triggers():
     config = Config(default_profile="p", profiles=profiles, limits=Limits())
 
     repl = Repl(config, executor, mutes, Session(), lambda profile: None,
-                None, lambda prompt: "", _SpySink(out_lines))
+                None, lambda prompt: "", out_lines.append)
 
     cont = repl.run_once("sleep 30")
 

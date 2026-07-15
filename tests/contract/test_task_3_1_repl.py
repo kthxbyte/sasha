@@ -65,29 +65,6 @@ class ScriptedConfirmer:
         return ("no", "")
 
 
-class SpySink:
-    """Sink test double (Task 6.1) — no coloring, raw text captured in a
-    shared list; both write_line and write_chunk append to it so existing
-    substring/exact-element assertions written against the old bare-callable
-    out() keep working unchanged."""
-
-    color_enabled = False
-
-    def __init__(self, events):
-        self._events = events
-
-    def write_line(self, text):
-        self._events.append(text)
-
-    def write_chunk(self, text):
-        if text:
-            self._events.append(text)
-
-    def ensure_newline(self):
-        if self._events and not self._events[-1].endswith("\n"):
-            self._events.append("\n")
-
-
 def _repl(stub_url, script=None):
     from sasha.config import Config, Limits, Profile
     from sasha.llm import ChatClient
@@ -112,7 +89,7 @@ def _repl(stub_url, script=None):
         return ChatClient(profile, timeout_s=10.0)
 
     repl = Repl(config, executor, mutes, Session(), client_factory,
-                ScriptedConfirmer(), lambda prompt: "", SpySink(out_chunks))
+                ScriptedConfirmer(), lambda prompt: "", out_chunks.append)
     return repl, executor, mutes, out_chunks, factory_calls
 
 
@@ -288,7 +265,7 @@ def _confirmer(inputs):
 
     queue = list(inputs)
     out_chunks = []
-    conf = TerminalConfirmer(lambda prompt: queue.pop(0), SpySink(out_chunks))
+    conf = TerminalConfirmer(lambda prompt: queue.pop(0), out_chunks.append)
     return conf, out_chunks
 
 

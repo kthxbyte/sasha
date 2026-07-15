@@ -60,26 +60,6 @@ class ScriptedConfirmer:
         return ("no", "")
 
 
-class SpySink:
-    """Sink test double (Task 6.1) — no coloring, raw text captured."""
-
-    color_enabled = False
-
-    def __init__(self, events):
-        self._events = events
-
-    def write_line(self, text):
-        self._events.append(text)
-
-    def write_chunk(self, text):
-        if text:
-            self._events.append(text)
-
-    def ensure_newline(self):
-        if self._events and not self._events[-1].endswith("\n"):
-            self._events.append("\n")
-
-
 def _repl(stub_url):
     from sasha.config import Config, Limits, Profile
     from sasha.llm import ChatClient
@@ -98,7 +78,7 @@ def _repl(stub_url):
         return ChatClient(profile, timeout_s=10.0)
 
     repl = Repl(config, executor, mutes, Session(), client_factory,
-                ScriptedConfirmer(), lambda prompt: "", SpySink(out_chunks))
+                ScriptedConfirmer(), lambda prompt: "", out_chunks.append)
     return repl, executor, out_chunks
 
 
