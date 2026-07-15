@@ -42,19 +42,52 @@ future improvement to the dispatch tooling — should know about.
   no `stream`, `process`, or `loop` entries, meaning it never made (or
   never logged making) a first call to the model. The dispatch's stdout
   capture file was completely empty the entire time.
-- **Diagnosis:** undetermined — bootstrap completed cleanly (config
-  loaded, LSPs/formatters resolved) but the agent loop never started. Not
-  a slow provider response (no outbound network connection existed to be
-  slow) and not an infinite retry loop (no repeated log entries, no CPU
-  churn). Left the process in a state indistinguishable from "waiting on
-  something that will never arrive."
+- **Diagnosis (revised after a second, reproducible occurrence — see
+  below):** initially undetermined. Ruled out: db corruption (`PRAGMA
+  integrity_check` → `ok`), stale db lock (`fuser` on `opencode.db*` found
+  nothing), disk space (11G free), deepseek API/network/auth (direct
+  `curl` to `https://api.deepseek.com/chat/completions` with the stored
+  key from `auth.json` returned HTTP 200 in 1.7s), prompt size (Task 8.1's
+  spec, 6913 bytes, is barely larger than Task 7.1's 6822-byte spec, which
+  dispatched successfully). Leading hypothesis: `opencode run` is launched
+  with no explicit stdin redirection in CLAUDE.md's dispatch command; if
+  it probes stdin (TTY check / "read piped context" pattern common in
+  CLIs), it can block forever waiting for EOF in this sandboxed shell,
+  which never delivers one. This would explain "clean bootstrap, then
+  nothing" with zero CPU churn and zero network activity — the process is
+  parked on a read, not doing work.
 - **Resolution:** killed the `opencode run` process and its wrapper shell
-  (Bash `kill`), then re-dispatched the identical command against the
-  same base commit.
-- **Follow-up:** `run-phase.sh`'s dispatch step should have a wall-clock
-  timeout (e.g. kill + escalate if `opencode.log` shows no `stream`/
-  `process` line within N minutes of the wrapper starting) rather than
-  waiting indefinitely on a foreground-equivalent background task. This
-  incident was only caught because Salvador noticed the wait felt too
-  long — a fully unattended loop run would have stalled here with no
-  automatic recovery.
+  (Bash `kill`). First retry (identical command, no stdin change) hung
+  identically — same bootstrap-then-silence signature, killed after 590s
+  by a `timeout` wrapper this time instead of a manual kill. Second retry
+  adds `< /dev/null` to the dispatch command to close stdin explicitly.
+- **Follow-up:** if `< /dev/null` resolves it, CLAUDE.md's Dispatch
+  Command template should gain it permanently — every future `opencode
+  run` invocation should redirect stdin from `/dev/null` by default, not
+  just when a hang is suspected. Independent of that fix,
+  `run-phase.sh`'s dispatch step should still have a wall-clock timeout
+  (kill + escalate if `opencode.log` shows no `stream`/`process` line
+  within N minutes) rather than waiting indefinitely — this incident was
+  only caught twice because Salvador noticed the wait felt too long; a
+  fully unattended loop run would have stalled with no automatic
+  recovery.
+
+### 2026-07-15 — Task 8.1 (retry 1) — identical hang, confirms reproducibility
+
+- **Model / command:** same as above, re-dispatched from base
+  `84f0869` after killing the first hang and gitignoring an unrelated
+  untracked file (`proposal-personality.md`) that was dirtying the tree.
+  This time wrapped in `timeout 590` so it could not hang indefinitely.
+- **Symptom:** `opencode.log` run `71500ac1`: bootstrap completed
+  (`creating instance` through `init`) at 18:57:00 UTC, one
+  `cleanup prune=7.days` tick at 18:58:01, then silence until `timeout`
+  sent SIGTERM at ~590s (exit code 143). Output file contained only
+  `Terminated`. Working tree stayed clean — nothing was ever touched.
+- **Diagnosis:** identical signature to the first hang, on a fresh
+  process with a verified-healthy db/network/API underneath. Confirms
+  this is reproducible, not a one-off fluke — strengthens the stdin
+  hypothesis above (or points to some other deterministic startup bug in
+  this opencode installation/version, triggered every time regardless of
+  prompt content).
+- **Resolution:** proceeding to retry #2 with `< /dev/null` appended to
+  the dispatch command.
