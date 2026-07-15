@@ -26,7 +26,12 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [x] Task 3.3 — End-to-end smoke + README
 - [x] Task 3.4 — REPL streaming passthrough (v1 review finding)
 
-## v2 (outline only — specced after v1 review)
+## Phase 4 — Job control (ISSUE-015 / ISSUE-016)
 
-- Phase 4 — Multi-tool registry & per-tool permissions
-- Phase 5 — Session persistence & resume
+- [ ] Task 4.1 — tcsetpgrp handoff, Ctrl+Z termination, TUI passthrough ← current
+
+## v2 (outline only — specced after v1 review; numbering/sequencing among
+## ISSUE-014/017/018/019/020 and these phases still to be decided)
+
+- Phase 5 — Multi-tool registry & per-tool permissions
+- Phase 6 — Session persistence & resume
