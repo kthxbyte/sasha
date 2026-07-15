@@ -1,15 +1,31 @@
 import os
 import shlex
 import sys
+from typing import Protocol
 
 from sasha.agent import run_consult
 from sasha.llm import ChatError
 from sasha.triggers import Decision, command_word, decide
 
 
+class Sink(Protocol):
+    color_enabled: bool
+
+    def write_line(self, text: str) -> None:
+        """Write one complete message; a newline is appended."""
+
+    def write_chunk(self, text: str) -> None:
+        """Write raw streamed text with no added newline. No-op for empty
+        text. May be called many times for one logical message."""
+
+    def ensure_newline(self) -> None:
+        """Write a newline only if the last write didn't already end in
+        one. No-op if nothing has been written yet."""
+
+
 class Repl:
     def __init__(self, config, executor, mutes, session, client_factory,
-                 confirmer, input_fn, out):
+                 confirmer, input_fn, sink):
         self._config = config
         self._executor = executor
         self._mutes = mutes
@@ -17,27 +33,25 @@ class Repl:
         self._client_factory = client_factory
         self._confirmer = confirmer
         self._input_fn = input_fn
-        self._out = out
+        self._sink = sink
         self._current_profile = config.profiles[config.default_profile]
         self._pending_offer = None  # (line, exit_code) or None
 
     def _consult(self, auto_prompt=None):
         if auto_prompt:
             self._session.add_user(auto_prompt)
-        self._out("[sasha] thinking…")
+        self._sink.write_line("[sasha] thinking…")
         try:
             client = self._client_factory(self._current_profile)
-            def stream_out(text):
-                sys.stdout.write(text)
-                sys.stdout.flush()
-                if self._out is not print:
-                    self._out(text)
             run_consult(self._session, client, self._executor,
-                        self._confirmer, stream_out,
+                        self._confirmer, self._sink.write_chunk,
                         max_tool_turns=self._config.limits.max_tool_turns)
         except ChatError as e:
-            self._out(f"[sasha] {self._current_profile.name} unreachable: "
-                      f"{e.reason} — 'sasha profile <name>' to switch")
+            self._sink.write_line(
+                f"[sasha] {self._current_profile.name} unreachable: "
+                f"{e.reason} — 'sasha profile <name>' to switch")
+        finally:
+            self._sink.ensure_newline()
 
     def _handle_pending_offer_ignore(self):
         if self._pending_offer is not None:
@@ -45,7 +59,7 @@ class Repl:
             cmd = command_word(off_line)
             crossed = self._mutes.record_ignored(cmd, off_exit)
             if crossed:
-                self._out(f"[sasha] muting offers for {cmd} "
+                self._sink.write_line(f"[sasha] muting offers for {cmd} "
                           f"exit {off_exit} — "
                           f"'sasha unmute {cmd}' to restore")
             self._pending_offer = None
@@ -55,7 +69,7 @@ class Repl:
         try:
             tokens = shlex.split(rest)
         except ValueError:
-            self._out(f"[sasha] unknown command: {rest}")
+            self._sink.write_line(f"[sasha] unknown command: {rest}")
             return True
 
         if not tokens:
@@ -71,7 +85,7 @@ class Repl:
                         n = int(tokens[2])
                         self._mutes.mute(cmd, n)
                     except ValueError:
-                        self._out(f"[sasha] unknown command: {rest}")
+                        self._sink.write_line(f"[sasha] unknown command: {rest}")
                 else:
                     self._mutes.mute(cmd, None)
         elif verb == "unmute":
@@ -82,30 +96,30 @@ class Repl:
                         n = int(tokens[2])
                         self._mutes.unmute(cmd, n)
                     except ValueError:
-                        self._out(f"[sasha] unknown command: {rest}")
+                        self._sink.write_line(f"[sasha] unknown command: {rest}")
                 else:
                     self._mutes.unmute(cmd, None)
         elif verb == "profile":
             if len(tokens) == 1:
                 p = self._current_profile
-                self._out(f"[sasha] profile: {p.name} "
+                self._sink.write_line(f"[sasha] profile: {p.name} "
                           f"({p.model} @ {p.base_url})")
             elif len(tokens) >= 2:
                 name = tokens[1]
                 if name in self._config.profiles:
                     self._current_profile = self._config.profiles[name]
                     p = self._current_profile
-                    self._out(f"[sasha] profile: {p.name} "
+                    self._sink.write_line(f"[sasha] profile: {p.name} "
                               f"({p.model} @ {p.base_url})")
                 else:
-                    self._out(f"[sasha] unknown profile: {name}")
+                    self._sink.write_line(f"[sasha] unknown profile: {name}")
         elif verb == "help":
-            self._out("[sasha] sasha mute <cmd> [<N>], "
+            self._sink.write_line("[sasha] sasha mute <cmd> [<N>], "
                       "sasha unmute <cmd>, "
                       "sasha profile [<name>], "
                       "?? <question>")
         else:
-            self._out(f"[sasha] unknown command: {rest}")
+            self._sink.write_line(f"[sasha] unknown command: {rest}")
 
         return True
 
@@ -156,14 +170,14 @@ class Repl:
         self._session.note_command(stripped, result)
 
         if result.ctrl_z_terminated:
-            self._out("[sasha] Ctrl+Z not supported — command terminated")
+            self._sink.write_line("[sasha] Ctrl+Z not supported — command terminated")
             return True
 
         decision = decide(stripped, result, self._mutes)
         if decision == Decision.AUTO_CONSULT:
             self._consult()
         elif decision == Decision.OFFER:
-            self._out(f"[sasha] failed (exit {result.exit_code}) "
+            self._sink.write_line(f"[sasha] failed (exit {result.exit_code}) "
                       f"— press Enter to ask")
             self._pending_offer = (stripped, result.exit_code)
 
@@ -189,13 +203,13 @@ class Repl:
 
 
 class TerminalConfirmer:
-    def __init__(self, input_fn, out):
+    def __init__(self, input_fn, sink):
         self._input_fn = input_fn
-        self._out = out
+        self._sink = sink
 
     def ask(self, command, description):
         desc = description if description else "(no description provided)"
-        self._out(f"[sasha] wants to run:  {command}\n"
+        self._sink.write_line(f"[sasha] wants to run:  {command}\n"
                   f"        └ {desc}\n"
                   f"        [y]es / [n]o / [e]dit — or type a reply")
         response = self._input_fn("> ").strip()
@@ -208,3 +222,27 @@ class TerminalConfirmer:
             return ("edit", edited)
         else:
             return ("reply", response)
+
+
+class TerminalSink:
+    def __init__(self) -> None:
+        self.color_enabled = (sys.stdout.isatty()
+                              and "NO_COLOR" not in os.environ)
+        self._ends_in_newline = True
+
+    def write_line(self, text: str) -> None:
+        print(text)
+        self._ends_in_newline = True
+
+    def write_chunk(self, text: str) -> None:
+        if not text:
+            return
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        self._ends_in_newline = text.endswith("\n")
+
+    def ensure_newline(self) -> None:
+        if not self._ends_in_newline:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            self._ends_in_newline = True

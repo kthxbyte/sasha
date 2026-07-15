@@ -8,7 +8,7 @@ from sasha.config import ConfigError, load
 from sasha.executor import Executor
 from sasha.llm import ChatClient
 from sasha.mutes import MuteStore
-from sasha.repl import Repl, TerminalConfirmer
+from sasha.repl import Repl, TerminalConfirmer, TerminalSink
 from sasha.session import Session
 
 
@@ -62,7 +62,9 @@ def main(argv: list[str] | None = None) -> int:
 
     client_factory = lambda p: ChatClient(p)
 
-    confirmer = TerminalConfirmer(input, print)
+    sink = TerminalSink()
+
+    confirmer = TerminalConfirmer(input, sink)
 
     _isatty = sys.stdin.isatty()
 
@@ -80,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
         client_factory=client_factory,
         confirmer=confirmer,
         input_fn=_repl_input,
-        out=print,
+        sink=sink,
     )
 
     if profile_name != config.default_profile:
