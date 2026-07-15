@@ -92,18 +92,63 @@ future improvement to the dispatch tooling — should know about.
 - **Resolution:** proceeding to retry #2 with `< /dev/null` appended to
   the dispatch command.
 
-### 2026-07-15 — Task 8.1 (retry 2) — `< /dev/null` resolved it, confirmed root cause
+### 2026-07-15 — Task 8.1 (retry 2) — `< /dev/null` coincided with success; NOT confirmed as the cause
 
 - **Resolution:** re-ran the identical dispatch with `< /dev/null` added
   to the `opencode run` invocation. It streamed immediately — read the
   issue file and `repl.py`, ran the contract suite, edited `write_line`,
   reran the full suite (169 passed), committed `250e8b5` with the correct
   trailers — all within under a minute, no `timeout` needed.
-- **Root cause confirmed:** `opencode run` blocks indefinitely on an
-  unclosed stdin in this sandboxed shell when none is supplied. CLAUDE.md's
-  Dispatch Command template needs `< /dev/null` added permanently — every
-  prior successful dispatch in this project's history (Tasks 1.1 through
-  7.1) was launched by whatever shell/session ran it at the time; this is
-  the first time the exact invocation environment reproduced the hang
-  twice in a row, so the fix belongs in the standing command, not as a
-  one-off workaround.
+- **Original conclusion (later walked back):** this entry originally
+  claimed "root cause confirmed: opencode run blocks indefinitely on an
+  unclosed stdin." That was too strong a claim from a single before/after
+  data point — correlation, not a verified mechanism. See the replication
+  study below, which retracts it.
+
+### 2026-07-15 — Replication study: could not reproduce the hang; cause remains unconfirmed
+
+Prompted by Salvador asking whether the hangs might be explained by his
+local LLM (llamacpp, LAN endpoint `192.168.8.253:11434`) being down. Ruled
+that out first: neither hung run's log (`fae4d99c`, `71500ac1`) contains a
+single `stream`/`process`/`"llm runtime selected"` line — both hangs
+happened *before* opencode ever selected or contacted any provider, local
+or remote, so the local LLM's state is irrelevant to this specific failure.
+
+Then attempted to reproduce the hang directly, varying each variable
+suspected of causing it, all via `strace -f -tt` for direct syscall
+evidence rather than inference from `/proc`:
+
+1. No stdin redirection, small prompt, foreground — completed in seconds.
+2. No stdin redirection, ~7KB padded prompt (matching real task-spec
+   size), foreground — completed in seconds.
+3. Same as #2, run via background execution (matching how both real hangs
+   were launched) — completed in seconds (high CPU throughout, unlike the
+   real hangs' near-zero CPU).
+4. No stdin redirection, small prompt, foreground, run *immediately after
+   SIGTERM+SIGKILL-ing a mid-stream victim opencode process* — the closest
+   analogue to what actually happened before the second real hang
+   (kill the first hang, immediately re-dispatch) — completed in seconds.
+
+5 for 5 clean runs, zero reproductions, including the scenario closest to
+the real sequence of events. The rapid cascades of `+++ exited with 0 +++`
+lines visible in the strace logs during shutdown are normal multi-threaded
+teardown (bun's worker threads/processes being reaped in quick
+succession), not a loop or hang.
+
+- **Conclusion:** the `< /dev/null` fix from retry 2 is **not confirmed**
+  as the actual mechanism — it may have simply coincided with whatever
+  transient condition caused the two real hangs clearing on its own.
+  Checked for an environmental cause instead: no OOM events in `dmesg`, no
+  relevant `journalctl` warnings, no swap usage, 29G+ free memory, no
+  stale lock/pid/socket files under `~/.local/share/opencode/` or
+  `~/.config/opencode/`, and `opencode.db` integrity was already verified
+  `ok` in the first incident. No explanation found.
+- **Standing status:** cause remains **undetermined**. `< /dev/null`
+  stays in CLAUDE.md's Dispatch Command template — it's a harmless,
+  reasonable default for a non-interactive dispatch regardless of whether
+  it was the real fix — but it should not be trusted as a guaranteed
+  prevention. The wall-clock-timeout follow-up (kill + escalate if
+  `opencode.log` shows no `stream` line within N minutes of dispatch) is
+  now the more important mitigation, since this incident is unreproducible
+  on demand and could recur in an unattended `run-phase.sh` loop with no
+  one watching the clock.

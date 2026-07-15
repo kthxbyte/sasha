@@ -33,14 +33,22 @@ executor is deepseek-v4-pro; export `SASHA_DISPATCH_MODEL` before launching
 no script edit. The signature line travels in the dispatch prompt so it always
 names the model that actually ran.
 
-**`< /dev/null` is required, not optional** (added 2026-07-15 after
-Task 8.1's dispatch hung twice, reproducibly, in a sandboxed shell with no
-stdin attached — see `docs/superpowers/DISPATCH-INCIDENTS.md`). Without it,
-`opencode run` can block indefinitely on an unclosed stdin before ever
-logging its first model call — clean bootstrap, zero CPU churn, zero
-network activity, no error, just silence. A direct `curl` to the
+**`< /dev/null` is a defensive default, not a confirmed fix** (added
+2026-07-15 after Task 8.1's dispatch hung twice in a row — clean
+bootstrap, zero CPU churn, zero network activity, no error, just silence
+before ever logging its first model call. See
+`docs/superpowers/DISPATCH-INCIDENTS.md`). Adding it coincided with the
+next attempt succeeding, but a dedicated replication study — 5 attempts
+varying prompt size, stdin, foreground/background, and a kill-then-
+immediately-relaunch sequence matching the real incident, all under
+`strace` — could not reproduce the hang at all, with or without stdin
+redirected. The cause is **still undetermined**; a direct `curl` to the
 provider's API with the same key answered in under 2 seconds both times
-this happened, ruling out the provider/network/auth as the cause.
+the hang occurred, ruling out the provider/network/auth. Keep `< /dev/null`
+(harmless, reasonable for a non-interactive process) but don't treat it as
+a guaranteed prevention — if a dispatch hangs again, don't assume this
+already covers it; check `opencode.log` for a `stream` line before
+assuming progress, per the incident log.
 
 **Executor routing (Salvador's standing rule, 2026-07-14):** classify each
 task at spec-writing time. *Greenfield* tasks — a new module built against
