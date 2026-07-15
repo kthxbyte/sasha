@@ -30,8 +30,15 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 4.1 — tcsetpgrp handoff, Ctrl+Z termination, TUI passthrough
 
-## v2 (outline only — specced after v1 review; numbering/sequencing among
-## ISSUE-014/017/018/019/020 and these phases still to be decided)
+## Phase 5 — Quick wins (ISSUE-017 / ISSUE-020)
 
-- Phase 5 — Multi-tool registry & per-tool permissions
-- Phase 6 — Session persistence & resume
+- [ ] Task 5.1 — Drop redundant AUTO_CONSULT preamble on exit 127 ← current
+- [ ] Task 5.2 — "Thinking" indicator during LLM consult
+
+## Phase 6 — Output sink redesign (ISSUE-014 / ISSUE-018 / ISSUE-019)
+(outline only — not yet specced; needs its own brainstorming design pass)
+
+## v2 (outline only — specced after v1 review)
+
+- Phase 7 — Multi-tool registry & per-tool permissions
+- Phase 8 — Session persistence & resume
