@@ -16,3 +16,9 @@
 | ISSUE-012 | Task | Done | High | Task 3.0 — Agent loop hardening (tool-turn liveness) | 2026-07-14 | 2026-07-14 |
 | ISSUE-013 | Task | Done | High | Task 3.4 — REPL streaming passthrough (v1 review finding) | 2026-07-14 | 2026-07-14 |
 | ISSUE-014 | Issue | Open | Normal | out() conflates lines and stream chunks — repl hardcodes sys.stdout + a print identity check; redesign sink at v2 | 2026-07-14 | — |
+| ISSUE-015 | Issue | Open | High | REPL blocking on synchronous command execution (e.g. 'yes') | 2026-07-14 | — |
+| ISSUE-016 | Issue | Open | High | TUI programs (vi, mc, etc.) do not display correctly | 2026-07-14 | — |
+| ISSUE-017 | Issue | Open | Low | Redundant LLM explanation on 'command not found' (exit 127) | 2026-07-14 | — |
+| ISSUE-018 | Issue | Open | Low | LLM output missing trailing newline causes prompt discontinuity | 2026-07-14 | — |
+| ISSUE-019 | Issue | Open | Low | Enhanced shell prompt and terminal colorization | 2026-07-14 | — |
+| ISSUE-020 | Issue | Open | Low | Missing 'thinking' indicator during LLM queries | 2026-07-14 | — |
