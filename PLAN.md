@@ -59,7 +59,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 11 — Tab completion (ISSUE-028)
 
 - [x] Task 11.1 — Own-logic completion: PATH scan, sasha builtins, readline wiring
-- [ ] Task 11.2 — bash-completion subprocess integration + graceful degradation ← current
+- [x] Task 11.2 — bash-completion subprocess integration + graceful degradation
 
 ## v2 (outline only — specced after v1 review)
 
