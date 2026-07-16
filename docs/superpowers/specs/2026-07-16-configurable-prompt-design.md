@@ -16,7 +16,11 @@ excluding the parts of real `$PS1` that would require shelling out
 
 ### In scope:
 - A new `src/sasha/prompt.py` module: `render()` (pure function) and
-  `validate_template()` (raises `config.ConfigError`).
+  `validate_template()` (raises `prompt.PromptError`, a new exception
+  local to this module — `prompt.py` has no dependency on `config.py` at
+  all, avoiding a circular import; `config.load()` catches `PromptError`
+  and re-raises as `ConfigError`, same pattern already used for
+  `tomllib.TOMLDecodeError`).
 - Positional escapes: `\u` (user), `\h` (host), `\w` (full cwd,
   `~`-abbreviated), `\W` (cwd basename).
 - Named color tokens inside `\[ \]`: the 8 standard ANSI colors, each
@@ -139,8 +143,6 @@ non-goals.
 New file `src/sasha/prompt.py`:
 
 ```python
-from sasha.config import ConfigError
-
 _RL_IGNORE_START = "\001"
 _RL_IGNORE_END = "\002"
 _RESET = "\x1b[0m"
@@ -161,8 +163,15 @@ DEFAULT_TEMPLATE = r"\[green\]\u@\h:\w ✦ \[reset\]"
 _POSITIONAL = {"u", "h", "w", "W"}
 
 
+class PromptError(Exception):
+    """Raised by validate_template(). Local to this module — prompt.py
+    has no dependency on config.py, so config.load() catches this and
+    re-raises as ConfigError (same pattern it already uses for
+    tomllib.TOMLDecodeError)."""
+
+
 def validate_template(template: str) -> None:
-    """Raise ConfigError if `template` contains any unrecognized escape
+    """Raise PromptError if `template` contains any unrecognized escape
     or unknown \\[token\\] name. Called by config.load()."""
     ...
 
@@ -175,9 +184,21 @@ def render(template: str, *, user: str, host: str, cwd: str, home: str,
     ...
 ```
 
-`Config` (in `config.py`) gains a `prompt: str` field, parallel to
-`default_profile` (a plain top-level TOML key, not a nested table like
-`[limits]`, since the value is a single string):
+`Config` (in `config.py`) gains a `prompt: str = prompt.DEFAULT_TEMPLATE`
+field — a dataclass-level default (not just a `config.load()`-time
+fallback), so every existing contract test that constructs `Config(...)`
+directly with keyword arguments (six files — `test_task_3_1_repl.py`,
+`test_task_3_4_repl_streaming.py`, `test_task_4_1_job_control.py`,
+`test_task_5_1_drop_127_preamble.py`, `test_task_5_2_thinking_indicator.py`,
+`test_task_6_2_colorization_prompt.py` — none of which pass `prompt=`)
+keeps working unamended, with a real, valid template rather than `None`.
+This requires `config.py` to `import sasha.prompt as prompt` (or
+equivalent) at module level — one-way dependency only, since `prompt.py`
+imports nothing from `config.py`.
+
+`config.toml` gains a plain top-level `prompt` key, parallel to
+`default_profile` (not a nested table like `[limits]`, since the value is
+a single string):
 
 ```toml
 prompt = "\\[bold-green\\]\\u@\\h\\[reset\\]:\\[bold-blue\\]\\w\\[reset\\] $ "
@@ -185,8 +206,10 @@ prompt = "\\[bold-green\\]\\u@\\h\\[reset\\]:\\[bold-blue\\]\\w\\[reset\\] $ "
 
 `config.load()`: after resolving the raw `prompt` string (TOML value or
 `prompt.DEFAULT_TEMPLATE` if absent), calls
-`prompt.validate_template(value)` before constructing `Config` — same
-place `default_profile`'s existence is already checked.
+`prompt.validate_template(value)`, catching `prompt.PromptError` and
+re-raising `ConfigError(str(exc))` — same place `default_profile`'s
+existence is already checked, same wrapping pattern as
+`tomllib.TOMLDecodeError` a few lines above it in the existing function.
 
 `Repl.loop()` changes from its current hardcoded block to:
 
@@ -239,10 +262,13 @@ already makes today; `render()` does no normalization of its own.
 
 `validate_template()` performs the same left-to-right walk but only
 checks well-formedness — any `\` not starting `\u`, `\h`, `\w`, `\W`, or
-`\[<valid-token-name>\]` raises `ConfigError` with a message naming the
+`\[<valid-token-name>\]` raises `PromptError` with a message naming the
 exact bad substring (e.g. `unknown prompt token '\[grene\]'` or
 `unrecognized escape '\q' `) and, for unknown tokens, lists the valid
-names. An unterminated `\[` (no matching `\]`) is also a `ConfigError`.
+names. An unterminated `\[` (no matching `\]`) is also a `PromptError`.
+`config.load()` catches `PromptError` and re-raises `ConfigError(str(exc))`
+— callers of `config.load()` only ever see `ConfigError`; `PromptError` is
+an implementation detail of `prompt.py` used to avoid importing `config.py`.
 
 ### 6.3 `DEFAULT_TEMPLATE` equivalence
 
@@ -293,6 +319,15 @@ branch.
   with them. **Rationale:** Reusing/refactoring those is a separate,
   bigger decision (ISSUE-025) — unifying now would be unrelated scope
   creep into `TerminalSink`/`TerminalConfirmer`.
+- **Fixed:** `prompt.py` raises its own `PromptError` rather than
+  `config.ConfigError`; `config.load()` catches it and re-raises
+  `ConfigError`. **Rationale:** Caught while writing the task spec — the
+  original draft had `prompt.py` importing `ConfigError` from `config.py`
+  while `config.py` needed to import `DEFAULT_TEMPLATE`/`validate_template`
+  from `prompt.py`, a circular import. A module-local exception, wrapped
+  at the one call site that needs `ConfigError`, is the same pattern
+  `config.py` already uses for `tomllib.TOMLDecodeError` — no new pattern
+  introduced, and `prompt.py` stays a dependency-free leaf module.
 
 ## 8. Testing strategy
 
@@ -303,14 +338,14 @@ abbreviation and `\W`'s three-way edge cases from §6.1 (`cwd == home` →
 `"~"`, `cwd == "/"` → `"/"`, otherwise → basename); each of the 25 color tokens maps to
 its exact ANSI code, wrapped in `\001`/`\002`; `reset`; color suppression
 when `color_enabled=False` (positional escapes still substitute); unknown
-token and unrecognized escape each raise `ConfigError` via
+token and unrecognized escape each raise `PromptError` via
 `validate_template()`, message naming the bad substring; unterminated
-`\[` raises `ConfigError`. One dedicated equivalence test asserts
+`\[` raises `PromptError`. One dedicated equivalence test asserts
 `prompt.render(prompt.DEFAULT_TEMPLATE, ...)` byte-matches today's
 hardcoded `Repl.loop()` output for both the colored and plain cases (§6.3)
 — this is what lets `test_task_6_2_colorization_prompt.py::test_ac4_*`
-stay unamended. `config.py`'s own tests (if this task adds any under
-`tests/impl/`, or new contract tests if `config.load()`'s prompt handling
-needs its own coverage) verify `Config.prompt` defaults to
-`DEFAULT_TEMPLATE` when absent, a valid custom value round-trips, and an
-invalid one raises `ConfigError` at `load()` time.
+stay unamended. The same contract test file also covers `config.load()`'s
+new behavior directly: `Config.prompt` defaults to `DEFAULT_TEMPLATE` when
+absent from TOML, a valid custom `prompt` value round-trips into
+`Config.prompt` unchanged, and an invalid one raises `ConfigError` (not
+`PromptError` — confirming the wrap-and-reraise happens) at `load()` time.
