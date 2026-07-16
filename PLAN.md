@@ -50,7 +50,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 9 — Configurable prompt (ISSUE-022, Tier 1)
 
-- [ ] Task 9.1 — src/sasha/prompt.py: template engine + config.toml `prompt` key ← current
+- [x] Task 9.1 — src/sasha/prompt.py: template engine + config.toml `prompt` key
 
 ## v2 (outline only — specced after v1 review)
 
