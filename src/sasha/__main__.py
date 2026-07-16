@@ -116,11 +116,14 @@ def main(argv: list[str] | None = None) -> int:
                 if builtin is not None:
                     _last_matches = builtin
                 elif _bash_ok:
-                    _last_matches = completion.complete_via_bash(words, cword)
+                    _last_matches = completion.complete_via_bash(
+                        words, cword, cwd=executor.cwd)
                 else:
-                    _last_matches = completion.complete_filenames(text)
+                    _last_matches = completion.complete_filenames(
+                        text, cwd=executor.cwd)
         return _last_matches[state] if state < len(_last_matches) else None
 
+    readline.set_completer_delims(" \t\n")
     readline.set_completer(_completer)
     readline.parse_and_bind("tab: complete")
 

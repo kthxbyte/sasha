@@ -49,8 +49,8 @@ def words_and_cword(line: str, begidx: int, text: str) -> tuple[list[str], int]:
     return prior_words + [text], len(prior_words)
 
 
-def complete_via_bash(words: list[str], cword: int,
-                      timeout_s: float = 0.5) -> list[str]:
+def complete_via_bash(words: list[str], cword: int, timeout_s: float = 0.5,
+                      cwd: str | None = None) -> list[str]:
     comp_line = " ".join(words)
     comp_words_bash = "(" + " ".join(shlex.quote(w) for w in words) + ")"
     script = (
@@ -67,7 +67,7 @@ def complete_via_bash(words: list[str], cword: int,
     )
     try:
         r = subprocess.run(["bash", "-c", script], capture_output=True,
-                           text=True, timeout=timeout_s)
+                           text=True, timeout=timeout_s, cwd=cwd)
     except (subprocess.TimeoutExpired, OSError):
         return []
     return [line.rstrip() for line in r.stdout.splitlines() if line.rstrip()]
@@ -78,6 +78,12 @@ def bash_completion_available() -> bool:
             and pathlib.Path("/usr/share/bash-completion/bash_completion").exists())
 
 
-def complete_filenames(prefix: str) -> list[str]:
-    return sorted(m + "/" if os.path.isdir(m) else m
-                  for m in glob.glob(prefix + "*"))
+def complete_filenames(prefix: str, cwd: str | None = None) -> list[str]:
+    pattern = os.path.join(cwd, prefix) if cwd else prefix
+    is_abs = os.path.isabs(prefix)
+    matches = glob.glob(pattern + "*")
+    results = []
+    for m in matches:
+        display = m if (is_abs or not cwd) else os.path.relpath(m, cwd)
+        results.append(display + "/" if os.path.isdir(m) else display)
+    return sorted(results)
