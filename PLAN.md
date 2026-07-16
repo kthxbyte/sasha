@@ -56,7 +56,12 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 10.1 — Profile + ?? tip lines printed once at Repl.loop() startup
 
+## Phase 11 — Tab completion (ISSUE-028)
+
+- [ ] Task 11.1 — Own-logic completion: PATH scan, sasha builtins, readline wiring ← current
+- [ ] Task 11.2 — bash-completion subprocess integration + graceful degradation
+
 ## v2 (outline only — specced after v1 review)
 
-- Phase 11 — Multi-tool registry & per-tool permissions
-- Phase 12 — Session persistence & resume
+- Phase 12 — Multi-tool registry & per-tool permissions
+- Phase 13 — Session persistence & resume
