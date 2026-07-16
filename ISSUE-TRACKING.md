@@ -30,3 +30,4 @@
 | ISSUE-026 | Issue | Open | Normal | First-run setup friction — no config.toml is ever written, empty api_key silently sends an unauthenticated request instead of a friendly setup prompt — design note only, not specced | 2026-07-16 | — |
 | ISSUE-027 | Issue | Done | Low | Sasha looks like a thin bash wrapper — no boot-time hint about the ?? LLM trigger or which profile is active | 2026-07-16 | 2026-07-16 |
 | ISSUE-028 | Issue | Done | Normal | No TAB completion — bash-style command/argument completion via the real bash-completion ecosystem | 2026-07-16 | 2026-07-16 |
+| ISSUE-029 | Issue | Open | High | Path completion broken after cd and for any path containing '/' — completer ignores Executor.cwd, readline's default delims split words on '/' | 2026-07-16 | — |

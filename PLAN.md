@@ -61,7 +61,11 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [x] Task 11.1 — Own-logic completion: PATH scan, sasha builtins, readline wiring
 - [x] Task 11.2 — bash-completion subprocess integration + graceful degradation
 
+## Phase 12 — Path completion fixes (ISSUE-029)
+
+- [ ] Task 12.1 — readline delims + Executor.cwd threading for path completion ← current
+
 ## v2 (outline only — specced after v1 review)
 
-- Phase 12 — Multi-tool registry & per-tool permissions
-- Phase 13 — Session persistence & resume
+- Phase 13 — Multi-tool registry & per-tool permissions
+- Phase 14 — Session persistence & resume
