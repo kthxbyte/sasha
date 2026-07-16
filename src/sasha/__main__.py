@@ -98,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _last_line = None
     _last_matches = []
+    _bash_ok = completion.bash_completion_available()
 
     def _completer(text, state):
         nonlocal _last_line, _last_matches
@@ -112,7 +113,12 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 builtin = completion.complete_builtin_arg(
                     words, cword, list(config.profiles), mutes.muted_commands())
-                _last_matches = builtin if builtin is not None else []
+                if builtin is not None:
+                    _last_matches = builtin
+                elif _bash_ok:
+                    _last_matches = completion.complete_via_bash(words, cword)
+                else:
+                    _last_matches = completion.complete_filenames(text)
         return _last_matches[state] if state < len(_last_matches) else None
 
     readline.set_completer(_completer)
