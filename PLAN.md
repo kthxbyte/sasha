@@ -48,7 +48,11 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 8.1 — write_line() closes a dangling unterminated line before printing
 
+## Phase 9 — Configurable prompt (ISSUE-022, Tier 1)
+
+- [ ] Task 9.1 — src/sasha/prompt.py: template engine + config.toml `prompt` key ← current
+
 ## v2 (outline only — specced after v1 review)
 
-- Phase 9 — Multi-tool registry & per-tool permissions
-- Phase 10 — Session persistence & resume
+- Phase 10 — Multi-tool registry & per-tool permissions
+- Phase 11 — Session persistence & resume
