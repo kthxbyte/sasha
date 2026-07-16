@@ -152,3 +152,64 @@ succession), not a loop or hang.
   now the more important mitigation, since this incident is unreproducible
   on demand and could recur in an unattended `run-phase.sh` loop with no
   one watching the clock.
+
+### 2026-07-15 — Built the wall-clock-timeout follow-up: `scripts/dispatch-watchdog.sh`
+
+The follow-up from the replication study above is now implemented, wired
+into `run-phase.sh` in place of the bare `opencode run` call. Two modes:
+
+- **Default** (`WATCHDOG_FULL_TRACE=0`): if `opencode.log` shows no
+  `stream` line for the current run within `WATCHDOG_TIMEOUT_S` (default
+  180s), captures `/proc/<pid>/status`, `wchan`, `fd`, `cmdline` — plain
+  reads, zero overhead on every normal dispatch — then kills the process.
+- **Opt-in** (`WATCHDOG_FULL_TRACE=1`): additionally wraps the dispatch in
+  `strace -f -tt` from launch, so a live syscall trace exists if a hang is
+  detected. Discarded immediately on a normal exit.
+
+**Important discovery made while building this:** the originally-planned
+design was "launch normally, decide later, `strace -p <pid>` attach only
+if a hang looks likely" — attach on demand, zero cost on the happy path.
+That design does not work on this machine. This system has Yama
+`ptrace_scope=1` (`/proc/sys/kernel/yama/ptrace_scope` → `1`), which
+restricts `ptrace` attach to a process's own descendants. Tested the exact
+pattern directly: a shell launches a background child, then that same
+shell later runs `strace -f -tt -p <child_pid>` — fails with
+`ptrace(PTRACE_SEIZE, ...): Operation not permitted`, because at
+attach-time `strace` is a *sibling* of the target (both children of the
+same shell), not its ancestor, and Yama's restricted mode requires the
+tracer to be a genuine ancestor. This is why `WATCHDOG_FULL_TRACE` traces
+from launch instead (`strace` execs `opencode` directly, making it the
+real parent — no ptrace-permission issue) rather than attaching
+after-the-fact. `sudo` (raising to `ptrace_scope=0`, or `CAP_SYS_PTRACE`)
+would remove this restriction but wasn't used — this account has no
+passwordless sudo, and weakening system-wide ptrace protection isn't
+warranted just for this.
+
+**Sizing data, measured directly** (informed the cheap-by-default design):
+a full `strace -f` trace of a trivial single-turn dispatch (no tool calls)
+was 20.2MB; a light dispatch (2 file reads + 1 grep) was 36.1MB. A real
+task dispatch (edits + two full pytest runs, which `-f` recurses into,
+capturing the whole Python/pytest import storm) would likely be
+100–300+MB. All of that volume comes from *successful* runs — a genuine
+hang goes silent right after `init`, so the actually-diagnostic slice of
+any trace is small (its length is bounded by how much a bootstrap phase
+does, not by how long the hang lasts). This is the core reasoning for
+attach-only/trace-from-launch being reserved for suspected hangs, not run
+on every dispatch by default.
+
+**Storage:** `/dev/shm/sasha-dispatch-traces/` — a subdirectory of the
+system's existing `/dev/shm` tmpfs (20G total, confirmed already mounted,
+no `sudo`/`fstab` needed) rather than a dedicated size-capped mount.
+Traded a hard kernel-enforced quota for zero setup cost; 20G of headroom
+against a KB-few-MB typical incident (or ~300MB worst case, discarded
+immediately) makes the quota's protection margin comfortable either way.
+
+**Validated** (4 scenarios, using a copy of the real script with the
+`opencode run` line substituted for a plain `sleep`, pointed at a scratch
+log file so the real `opencode.log` and dispatch history stayed untouched):
+default-mode happy path (exit 0, zero artifacts), default-mode hang path
+(exit 2, correct `/proc` snapshots matching the sleeping process's actual
+`hrtimer_nanosleep` block), full-trace-mode hang path (exit 2, real strace
+evidence showing the exact blocked syscall — `clock_nanosleep(...)` — up
+to the SIGTERM that killed it), full-trace-mode happy path (exit 0, trace
+file discarded, `/dev/shm` usage back to baseline). All four passed.

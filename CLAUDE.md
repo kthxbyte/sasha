@@ -124,8 +124,23 @@ Every exit — pass or fail — ends with Salvador (or a fresh Tier 1 session) b
 
 Every dispatch appends a row to `metrics/dispatches.csv` (gitignored): start/end
 UTC, task, model, duration in seconds, result (`PASS` / `FAIL-gate` /
-`ESCALATE-issue`) — the local ledger of Tier 3 runs, useful for comparing
-executor models. Gitignored so failure rows never dirty the clean-tree gates.
+`FAIL-hang` / `ESCALATE-issue`) — the local ledger of Tier 3 runs, useful for
+comparing executor models. Gitignored so failure rows never dirty the
+clean-tree gates.
+
+**Dispatch is watchdog-wrapped, not a bare `opencode run` call.**
+`run-phase.sh` dispatches through `scripts/dispatch-watchdog.sh "$MODEL"
+"<prompt>"` (same arguments, drop-in), which kills and escalates
+(`FAIL-hang`) if `opencode.log` shows no `stream` line within
+`WATCHDOG_TIMEOUT_S` seconds (default 180) — see the "`< /dev/null` is a
+defensive default" note below for why this exists.
+`WATCHDOG_FULL_TRACE=1` additionally wraps the dispatch in `strace -f` from
+launch (see the script's own header comment for why an after-the-fact
+`strace -p` attach doesn't work on this machine — Yama `ptrace_scope=1`).
+Both modes write only to `/dev/shm/sasha-dispatch-traces/` (tmpfs, never
+disk) and discard on a normal exit. For a manual, one-off Tier 1 dispatch
+outside `run-phase.sh`, calling the watchdog directly is optional but
+recommended over a bare `opencode run`.
 
 ## verify.sh — the Tier 2 deterministic gate
 

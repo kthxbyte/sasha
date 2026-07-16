@@ -55,10 +55,15 @@ while true; do
   BASE=$(git rev-parse HEAD)
   T_START=$(date -u +%FT%TZ); S0=$SECONDS
   echo "=== $TASK — dispatching $(basename "$SPEC") on base ${BASE:0:12} via $MODEL ==="
-  opencode run --model "$MODEL" "$(realpath "$SPEC")
+  scripts/dispatch-watchdog.sh "$MODEL" "$(realpath "$SPEC")
 
 Sign your commit with exactly this trailer as the last line:
 Co-Authored-By: $MODEL (opencode) <noreply@opencode.ai>"
+  DISPATCH_STATUS=$?
+  if [ "$DISPATCH_STATUS" -eq 2 ]; then
+    metrics_row "FAIL-hang"
+    escalate "dispatch watchdog killed a hung $TASK run (no model call detected — see stderr above for diagnostics path under /dev/shm/sasha-dispatch-traces/)"
+  fi
 
   if ! scripts/verify.sh "$BASE" "$TASK"; then
     metrics_row "FAIL-gate"
