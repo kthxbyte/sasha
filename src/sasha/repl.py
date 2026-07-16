@@ -26,6 +26,10 @@ class Sink(Protocol):
         one. No-op if nothing has been written yet."""
 
 
+def _profile_line(profile):
+    return f"[sasha] profile: {profile.name} ({profile.model} @ {profile.base_url})"
+
+
 class Repl:
     def __init__(self, config, executor, mutes, session, client_factory,
                  confirmer, input_fn, sink):
@@ -105,15 +109,13 @@ class Repl:
         elif verb == "profile":
             if len(tokens) == 1:
                 p = self._current_profile
-                self._sink.write_line(f"[sasha] profile: {p.name} "
-                          f"({p.model} @ {p.base_url})")
+                self._sink.write_line(_profile_line(p))
             elif len(tokens) >= 2:
                 name = tokens[1]
                 if name in self._config.profiles:
                     self._current_profile = self._config.profiles[name]
                     p = self._current_profile
-                    self._sink.write_line(f"[sasha] profile: {p.name} "
-                              f"({p.model} @ {p.base_url})")
+                    self._sink.write_line(_profile_line(p))
                 else:
                     self._sink.write_line(f"[sasha] unknown profile: {name}")
         elif verb == "help":
@@ -187,6 +189,10 @@ class Repl:
         return True
 
     def loop(self):
+        p = self._current_profile
+        self._sink.write_line(_profile_line(p))
+        self._sink.write_line(
+            "[sasha] tip: type ?? followed by a question to chat with me directly")
         home = os.path.expanduser("~")
         user = getpass.getuser()
         host = socket.gethostname()
