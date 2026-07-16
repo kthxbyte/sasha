@@ -118,7 +118,10 @@ class Session:
                 history_to_trim = [m for m in history_to_trim if not (m.get("role") == "tool" and m.get("tool_call_id") in tool_call_ids)]
 
         # Assemble messages: [system] + trimmed_history + [final_user]
-        return [self.system_prompt_dict()] + history_to_trim + [final_user_msg]
+        messages = [self.system_prompt_dict()] + history_to_trim + [final_user_msg]
+        self.notes = []
+        self.last_stderr = ""
+        return messages
 
     def system_prompt_dict(self) -> dict[str, Any]:
         return {"role": "system", "content": self.system_prompt}
