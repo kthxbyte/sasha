@@ -54,7 +54,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 10 — Boot-time hint (ISSUE-027)
 
-- [ ] Task 10.1 — Profile + ?? tip lines printed once at Repl.loop() startup ← current
+- [x] Task 10.1 — Profile + ?? tip lines printed once at Repl.loop() startup
 
 ## v2 (outline only — specced after v1 review)
 
