@@ -71,7 +71,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 14 — Consume notes/stderr once (ISSUE-031)
 
-- [ ] Task 14.1 — build_messages() clears notes/last_stderr after use ← current
+- [x] Task 14.1 — build_messages() clears notes/last_stderr after use
 
 ## v2 (outline only — specced after v1 review)
 
