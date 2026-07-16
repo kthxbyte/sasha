@@ -66,6 +66,11 @@ class MuteStore:
             pairs[key] = {"muted": False, "ignored_streak": 0}
         self._save(data)
 
+    def muted_commands(self) -> list[str]:
+        data = self._load()
+        return sorted({key.rsplit(":", 1)[0]
+                       for key, v in data["pairs"].items() if v["muted"]})
+
     def _load(self):
         try:
             text = self._path.read_text()

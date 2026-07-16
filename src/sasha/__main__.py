@@ -4,6 +4,7 @@ import pathlib
 import readline
 import sys
 
+from sasha import completion
 from sasha.config import ConfigError, load
 from sasha.executor import Executor
 from sasha.llm import ChatClient
@@ -94,6 +95,28 @@ def main(argv: list[str] | None = None) -> int:
             readline.read_history_file(str(history_path))
     except Exception:
         pass
+
+    _last_line = None
+    _last_matches = []
+
+    def _completer(text, state):
+        nonlocal _last_line, _last_matches
+        line = readline.get_line_buffer()
+        if line != _last_line:
+            _last_line = line
+            words, cword = completion.words_and_cword(
+                line, readline.get_begidx(), text)
+            if cword == 0:
+                _last_matches = completion.complete_first_word(
+                    text, os.environ.get("PATH", "").split(os.pathsep))
+            else:
+                builtin = completion.complete_builtin_arg(
+                    words, cword, list(config.profiles), mutes.muted_commands())
+                _last_matches = builtin if builtin is not None else []
+        return _last_matches[state] if state < len(_last_matches) else None
+
+    readline.set_completer(_completer)
+    readline.parse_and_bind("tab: complete")
 
     repl.loop()
 
