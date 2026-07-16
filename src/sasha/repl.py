@@ -30,6 +30,14 @@ def _profile_line(profile):
     return f"[sasha] profile: {profile.name} ({profile.model} @ {profile.base_url})"
 
 
+def _boot_profile_line(profile):
+    return f" Profile    : {profile.name} (model: {profile.model})"
+
+
+def _boot_api_line(profile):
+    return f" API server : {profile.base_url}"
+
+
 class Repl:
     def __init__(self, config, executor, mutes, session, client_factory,
                  confirmer, input_fn, sink):
@@ -190,9 +198,11 @@ class Repl:
 
     def loop(self):
         p = self._current_profile
-        self._sink.write_line(_profile_line(p))
+        self._sink.write_line("")
+        self._sink.write_line(_boot_profile_line(p))
+        self._sink.write_line(_boot_api_line(p))
         self._sink.write_line(
-            "[sasha] tip: type ?? followed by a question to chat with me directly")
+            " Tip : type ?? followed by a question to chat with me directly")
         home = os.path.expanduser("~")
         user = getpass.getuser()
         host = socket.gethostname()

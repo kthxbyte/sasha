@@ -59,13 +59,24 @@ def _repl(events, cwd="/home/testuser"):
     return repl
 
 
-# --- AC1: profile line is the first write_line call -------------------------
+# --- AC1: boot banner is blank line, profile line, API line, in order -------
 
-def test_ac1_profile_line_is_first():
+def test_ac1_boot_banner_leads_with_blank_line():
     events = []
     _repl(events).loop()
-    assert events[0] == ("[sasha] profile: deepseek "
-                          "(deepseek-chat @ https://api.deepseek.com/v1)")
+    assert events[0] == ""
+
+
+def test_ac1_profile_line_is_second():
+    events = []
+    _repl(events).loop()
+    assert events[1] == " Profile    : deepseek (model: deepseek-chat)"
+
+
+def test_ac1_api_line_is_third():
+    events = []
+    _repl(events).loop()
+    assert events[2] == " API server : https://api.deepseek.com/v1"
 
 
 def test_ac1_reflects_whatever_profile_is_current():
@@ -76,34 +87,35 @@ def test_ac1_reflects_whatever_profile_is_current():
     repl._current_profile = Profile(name="local", base_url="http://x/v1",
                                      model="local-model", api_key="")
     repl.loop()
-    assert events[0] == "[sasha] profile: local (local-model @ http://x/v1)"
+    assert events[1] == " Profile    : local (model: local-model)"
+    assert events[2] == " API server : http://x/v1"
 
 
-# --- AC2: tip line is the second write_line call -----------------------------
+# --- AC2: tip line is the fourth write_line call -----------------------------
 
-def test_ac2_tip_line_is_second():
+def test_ac2_tip_line_is_fourth():
     events = []
     _repl(events).loop()
-    assert events[1] == ("[sasha] tip: type ?? followed by a question "
-                          "to chat with me directly")
+    assert events[3] == (
+        " Tip : type ?? followed by a question to chat with me directly")
 
 
-# --- AC3: both lines precede the first prompt request ------------------------
+# --- AC3: all four lines precede the first prompt request --------------------
 
-def test_ac3_both_lines_precede_first_prompt():
+def test_ac3_boot_banner_precedes_first_prompt():
     events = []
     _repl(events).loop()
     prompt_indices = [i for i, e in enumerate(events)
                       if isinstance(e, tuple) and e[0] == "prompt"]
     assert prompt_indices, "expected at least one prompt request"
-    assert prompt_indices[0] == 2
+    assert prompt_indices[0] == 4
 
 
-def test_ac3_only_two_lines_written_before_first_prompt():
+def test_ac3_only_four_lines_written_before_first_prompt():
     events = []
     _repl(events).loop()
     before_prompt = [e for e in events if isinstance(e, str)]
-    assert len(before_prompt) == 2
+    assert len(before_prompt) == 4
 
 
 # --- AC4: existing `profile` verb output is unchanged ------------------------
