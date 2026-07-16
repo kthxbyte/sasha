@@ -63,7 +63,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 12 — Path completion fixes (ISSUE-029)
 
-- [ ] Task 12.1 — readline delims + Executor.cwd threading for path completion ← current
+- [x] Task 12.1 — readline delims + Executor.cwd threading for path completion
 
 ## v2 (outline only — specced after v1 review)
 
