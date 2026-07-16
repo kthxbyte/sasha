@@ -23,7 +23,7 @@
 | ISSUE-019 | Issue | Done | Low | Enhanced shell prompt and terminal colorization | 2026-07-14 | 2026-07-15 |
 | ISSUE-020 | Issue | Done | Low | Missing 'thinking' indicator during LLM queries | 2026-07-14 | 2026-07-15 |
 | ISSUE-021 | Task | Done | High | Task 4.1 — Job control handoff (tcsetpgrp, Ctrl+Z termination, TUI passthrough) | 2026-07-14 | 2026-07-14 |
-| ISSUE-022 | Issue | Open | Low | Configurable prompt — bash $PS1-style convention (design note only, not specced) | 2026-07-15 | — |
+| ISSUE-022 | Issue | Done | Low | Configurable prompt — bash $PS1-style convention (Tier 1: \u \h \w \W + named color tokens) | 2026-07-15 | 2026-07-16 |
 | ISSUE-023 | Issue | Done | Low | Confirmation gate — distinct colors per line (command / description / prompt) | 2026-07-15 | 2026-07-15 |
 | ISSUE-024 | Issue | Done | Normal | TerminalSink.write_line() doesn't call ensure_newline() — mid-consult write_line (e.g. confirmation gate) runs onto an open streamed line | 2026-07-15 | 2026-07-15 |
 | ISSUE-025 | Issue | Open | Low | Reuse prompt.py's color-token vocabulary for other UI surfaces (confirmation gate, thinking indicator, sink colors) — design note only, not specced | 2026-07-16 | — |
