@@ -8,6 +8,7 @@ from typing import Protocol
 from sasha.agent import run_consult
 from sasha.llm import ChatError
 from sasha.triggers import Decision, command_word, decide
+import sasha.prompt as prompt_mod
 
 
 class Sink(Protocol):
@@ -189,22 +190,13 @@ class Repl:
         home = os.path.expanduser("~")
         user = getpass.getuser()
         host = socket.gethostname()
-        color_enabled = self._sink.color_enabled
         while True:
             cwd = self._executor.cwd
-            if cwd.startswith(home):
-                display_cwd = "~" + cwd[len(home):]
-            else:
-                display_cwd = cwd
-            raw_prompt = f"{user}@{host}:{display_cwd} ✦ "
-            if color_enabled:
-                prompt = (f"{_RL_IGNORE_START}{_PROMPT_COLOR}{_RL_IGNORE_END}"
-                          f"{raw_prompt}"
-                          f"{_RL_IGNORE_START}{_RESET}{_RL_IGNORE_END}")
-            else:
-                prompt = raw_prompt
+            rendered = prompt_mod.render(
+                self._config.prompt, user=user, host=host, cwd=cwd,
+                home=home, color_enabled=self._sink.color_enabled)
             try:
-                line = self._input_fn(prompt)
+                line = self._input_fn(rendered)
             except EOFError:
                 return
             except KeyboardInterrupt:

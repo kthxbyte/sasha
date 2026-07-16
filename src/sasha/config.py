@@ -5,6 +5,8 @@ import os
 import pathlib
 import tomllib
 
+import sasha.prompt as prompt
+
 
 @dataclasses.dataclass(frozen=True)
 class Profile:
@@ -27,6 +29,7 @@ class Config:
     default_profile: str
     profiles: dict[str, Profile]
     limits: Limits
+    prompt: str = prompt.DEFAULT_TEMPLATE
 
 
 class ConfigError(Exception):
@@ -115,6 +118,7 @@ def load(path: pathlib.Path | None = None) -> Config:
                 for name, pf in _DEFAULT_PROFILE_FIELDS_BY_NAME.items()
             },
             limits=Limits(),
+            prompt=prompt.DEFAULT_TEMPLATE,
         )
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(str(exc)) from exc
@@ -122,6 +126,14 @@ def load(path: pathlib.Path | None = None) -> Config:
     default_profile_name = raw.get("default_profile", _DEFAULT_PROFILE_NAME)
     if not isinstance(default_profile_name, str):
         default_profile_name = _DEFAULT_PROFILE_NAME
+
+    prompt_template = raw.get("prompt", prompt.DEFAULT_TEMPLATE)
+    if not isinstance(prompt_template, str):
+        prompt_template = prompt.DEFAULT_TEMPLATE
+    try:
+        prompt.validate_template(prompt_template)
+    except prompt.PromptError as exc:
+        raise ConfigError(str(exc)) from exc
 
     profile_fields_by_name = _build_default_profiles()
 
@@ -154,4 +166,5 @@ def load(path: pathlib.Path | None = None) -> Config:
         default_profile=default_profile_name,
         profiles=profiles,
         limits=limits,
+        prompt=prompt_template,
     )
