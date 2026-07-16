@@ -26,3 +26,5 @@
 | ISSUE-022 | Issue | Open | Low | Configurable prompt — bash $PS1-style convention (design note only, not specced) | 2026-07-15 | — |
 | ISSUE-023 | Issue | Done | Low | Confirmation gate — distinct colors per line (command / description / prompt) | 2026-07-15 | 2026-07-15 |
 | ISSUE-024 | Issue | Done | Normal | TerminalSink.write_line() doesn't call ensure_newline() — mid-consult write_line (e.g. confirmation gate) runs onto an open streamed line | 2026-07-15 | 2026-07-15 |
+| ISSUE-025 | Issue | Open | Low | Reuse prompt.py's color-token vocabulary for other UI surfaces (confirmation gate, thinking indicator, sink colors) — design note only, not specced | 2026-07-16 | — |
+| ISSUE-026 | Issue | Open | Normal | First-run setup friction — no config.toml is ever written, empty api_key silently sends an unauthenticated request instead of a friendly setup prompt — design note only, not specced | 2026-07-16 | — |
