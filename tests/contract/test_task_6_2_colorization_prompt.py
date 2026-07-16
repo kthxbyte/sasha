@@ -154,7 +154,7 @@ def test_ac4_prompt_includes_user_host(monkeypatch):
 
     assert len(input_fn.prompts) == 1
     prompt = input_fn.prompts[0]
-    assert prompt == "alice@devbox:/home/testuser/project ✦ "
+    assert prompt == "alice@devbox:/home/testuser/project✦ "
 
 
 def test_ac4_prompt_abbreviates_home(monkeypatch):
@@ -169,7 +169,7 @@ def test_ac4_prompt_abbreviates_home(monkeypatch):
 
     repl.loop()
 
-    assert input_fn.prompts[0] == "alice@devbox:~/project ✦ "
+    assert input_fn.prompts[0] == "alice@devbox:~/project✦ "
 
 
 def test_ac4_prompt_colored_with_readline_markers(monkeypatch):
@@ -185,7 +185,7 @@ def test_ac4_prompt_colored_with_readline_markers(monkeypatch):
 
     prompt = input_fn.prompts[0]
     expected = (f"{_RL_IGNORE_START}{_PROMPT_COLOR}{_RL_IGNORE_END}"
-                f"alice@devbox:/tmp ✦ "
+                f"alice@devbox:/tmp✦ "
                 f"{_RL_IGNORE_START}{_RESET}{_RL_IGNORE_END}")
     assert prompt == expected
 
@@ -204,4 +204,4 @@ def test_ac4_prompt_uncolored_when_color_disabled(monkeypatch):
     prompt = input_fn.prompts[0]
     assert _RL_IGNORE_START not in prompt
     assert "\x1b[" not in prompt
-    assert prompt == "alice@devbox:/tmp ✦ "
+    assert prompt == "alice@devbox:/tmp✦ "

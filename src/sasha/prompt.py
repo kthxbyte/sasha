@@ -15,7 +15,7 @@ for _name, _code in _BASE_CODES.items():
     COLOR_TOKENS[f"bold-{_name}"] = f"\x1b[1;{_code}m"
     COLOR_TOKENS[f"dim-{_name}"] = f"\x1b[2;{_code}m"
 
-DEFAULT_TEMPLATE: str = r"\[green\]\u@\h:\w ✦ \[reset\]"
+DEFAULT_TEMPLATE: str = r"\[green\]\u@\h:\w✦ \[reset\]"
 
 _POSITIONAL = {"u", "h", "w", "W"}
 

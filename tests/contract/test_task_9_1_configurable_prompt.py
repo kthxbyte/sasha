@@ -229,7 +229,7 @@ def test_ac5_default_template_matches_hardcoded_output_colored():
                  cwd="/home/alice/project", home="/home/alice",
                  color_enabled=True)
     expected = (f"{_RL_IGNORE_START}{_PROMPT_COLOR}{_RL_IGNORE_END}"
-                f"alice@devbox:~/project ✦ "
+                f"alice@devbox:~/project✦ "
                 f"{_RL_IGNORE_START}{_RESET}{_RL_IGNORE_END}")
     assert out == expected
 
@@ -240,7 +240,7 @@ def test_ac5_default_template_matches_hardcoded_output_plain():
     out = render(DEFAULT_TEMPLATE, user="alice", host="devbox",
                  cwd="/home/alice/project", home="/home/alice",
                  color_enabled=False)
-    assert out == "alice@devbox:~/project ✦ "
+    assert out == "alice@devbox:~/project✦ "
 
 
 # --- AC6: config.load() integration ---------------------------------------

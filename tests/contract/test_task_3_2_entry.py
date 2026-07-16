@@ -80,7 +80,7 @@ def test_ac4_prompt(env_home):
     home, env = env_home
     r = _run(env, stdin="exit\n", cwd=str(home))
     assert r.returncode == 0
-    assert "~ ✦ " in r.stdout
+    assert "~✦ " in r.stdout
 
 
 # --- AC5 -----------------------------------------------------------------------------
