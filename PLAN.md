@@ -65,7 +65,11 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 12.1 — readline delims + Executor.cwd threading for path completion
 
+## Phase 13 — Personality file (ISSUE-030)
+
+- [ ] Task 13.1 — personality.py + Session integration + __main__.py wiring ← current
+
 ## v2 (outline only — specced after v1 review)
 
-- Phase 13 — Multi-tool registry & per-tool permissions
-- Phase 14 — Session persistence & resume
+- Phase 14 — Multi-tool registry & per-tool permissions
+- Phase 15 — Session persistence & resume
