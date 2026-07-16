@@ -31,4 +31,4 @@
 | ISSUE-027 | Issue | Done | Low | Sasha looks like a thin bash wrapper — no boot-time hint about the ?? LLM trigger or which profile is active | 2026-07-16 | 2026-07-16 |
 | ISSUE-028 | Issue | Done | Normal | No TAB completion — bash-style command/argument completion via the real bash-completion ecosystem | 2026-07-16 | 2026-07-16 |
 | ISSUE-029 | Issue | Done | High | Path completion broken after cd and for any path containing '/' — completer ignores Executor.cwd, readline's default delims split words on '/' | 2026-07-16 | 2026-07-16 |
-| ISSUE-030 | Issue | Open | Normal | Personality file — load ~/.config/sasha/PERSONALITY.md into the LLM system prompt, self-installing a neutral default when absent | 2026-07-16 | — |
+| ISSUE-030 | Issue | Done | Normal | Personality file — load ~/.config/sasha/PERSONALITY.md into the LLM system prompt, self-installing a neutral default when absent | 2026-07-16 | 2026-07-16 |
