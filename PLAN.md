@@ -52,7 +52,11 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 9.1 — src/sasha/prompt.py: template engine + config.toml `prompt` key
 
+## Phase 10 — Boot-time hint (ISSUE-027)
+
+- [ ] Task 10.1 — Profile + ?? tip lines printed once at Repl.loop() startup ← current
+
 ## v2 (outline only — specced after v1 review)
 
-- Phase 10 — Multi-tool registry & per-tool permissions
-- Phase 11 — Session persistence & resume
+- Phase 11 — Multi-tool registry & per-tool permissions
+- Phase 12 — Session persistence & resume
