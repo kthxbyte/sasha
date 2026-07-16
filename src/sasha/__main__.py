@@ -5,6 +5,7 @@ import readline
 import sys
 
 from sasha import completion
+from sasha import personality
 from sasha.config import ConfigError, load
 from sasha.executor import Executor
 from sasha.llm import ChatClient
@@ -59,11 +60,17 @@ def main(argv: list[str] | None = None) -> int:
 
     mutes = MuteStore(state_dir / "mutes.json", threshold=limits.mute_threshold)
 
-    session = Session(limits.history_tokens)
+    personality_result = personality.load_personality()
+
+    session = Session(limits.history_tokens,
+                      personality=personality_result.text)
 
     client_factory = lambda p: ChatClient(p)
 
     sink = TerminalSink()
+
+    if personality_result.notice:
+        sink.write_line(personality_result.notice)
 
     confirmer = TerminalConfirmer(input, sink)
 

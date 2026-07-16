@@ -15,21 +15,26 @@ class NoteCommand:
     exit_code: int
 
 class Session:
-    def __init__(self, history_token_budget: int = 12000) -> None:
+    def __init__(self, history_token_budget: int = 12000,
+                 personality: str = "") -> None:
         self.history_token_budget = history_token_budget
+        self._personality = personality
         self.history: list[dict[str, Any]] = []  # Store message dicts
         self.notes: list[NoteCommand] = []  # Store note_command entries
         self.last_stderr: str = ""
         self.system_prompt: str = self._build_system_prompt()
 
     def _build_system_prompt(self) -> str:
-        return (
+        functional = (
             f"You are Sasha, an interactive shell wrapper. "
             f"Proposed commands require user confirmation with 'y' or 'e'. "
             f"Free-text replies never execute anything. "
             f"The platform is {platform.platform()}. "
             f"The shell is bash."
         )
+        if self._personality:
+            return f"{self._personality}\n\n{functional}"
+        return functional
 
     def note_command(self, line: str, result: ExecResult) -> None:
         self.notes.append(NoteCommand(line, result.exit_code))
