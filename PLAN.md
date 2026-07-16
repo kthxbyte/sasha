@@ -67,7 +67,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 13 — Personality file (ISSUE-030)
 
-- [ ] Task 13.1 — personality.py + Session integration + __main__.py wiring ← current
+- [x] Task 13.1 — personality.py + Session integration + __main__.py wiring
 
 ## v2 (outline only — specced after v1 review)
 
