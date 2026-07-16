@@ -69,7 +69,11 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 13.1 — personality.py + Session integration + __main__.py wiring
 
+## Phase 14 — Consume notes/stderr once (ISSUE-031)
+
+- [ ] Task 14.1 — build_messages() clears notes/last_stderr after use ← current
+
 ## v2 (outline only — specced after v1 review)
 
-- Phase 14 — Multi-tool registry & per-tool permissions
-- Phase 15 — Session persistence & resume
+- Phase 15 — Multi-tool registry & per-tool permissions
+- Phase 16 — Session persistence & resume

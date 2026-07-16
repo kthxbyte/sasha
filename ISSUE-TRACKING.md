@@ -32,3 +32,4 @@
 | ISSUE-028 | Issue | Done | Normal | No TAB completion — bash-style command/argument completion via the real bash-completion ecosystem | 2026-07-16 | 2026-07-16 |
 | ISSUE-029 | Issue | Done | High | Path completion broken after cd and for any path containing '/' — completer ignores Executor.cwd, readline's default delims split words on '/' | 2026-07-16 | 2026-07-16 |
 | ISSUE-030 | Issue | Done | Normal | Personality file — load ~/.config/sasha/PERSONALITY.md into the LLM system prompt, self-installing a neutral default when absent | 2026-07-16 | 2026-07-16 |
+| ISSUE-031 | Issue | Open | High | Stale command notes/stderr silently re-surface into every subsequent LLM turn — Session.notes/last_stderr are never consumed after being shown once | 2026-07-16 | — |
