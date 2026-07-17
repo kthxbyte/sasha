@@ -1,4 +1,5 @@
 import argparse
+import getpass
 import os
 import pathlib
 import readline
@@ -72,6 +73,9 @@ def main(argv: list[str] | None = None) -> int:
     if personality_result.notice:
         sink.write_line(personality_result.notice)
 
+    if config.notice:
+        sink.write_line(config.notice)
+
     confirmer = TerminalConfirmer(input, sink)
 
     _isatty = sys.stdin.isatty()
@@ -91,6 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         confirmer=confirmer,
         input_fn=_repl_input,
         sink=sink,
+        getpass_fn=getpass.getpass,
     )
 
     if profile_name != config.default_profile:

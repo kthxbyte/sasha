@@ -1,3 +1,4 @@
+import dataclasses
 import getpass
 import os
 import shlex
@@ -5,6 +6,7 @@ import socket
 import sys
 from typing import Protocol
 
+import sasha.config as config
 from sasha.agent import run_consult
 from sasha.llm import ChatError
 from sasha.triggers import Decision, command_word, decide
@@ -40,7 +42,7 @@ def _boot_api_line(profile):
 
 class Repl:
     def __init__(self, config, executor, mutes, session, client_factory,
-                 confirmer, input_fn, sink):
+                 confirmer, input_fn, sink, getpass_fn=getpass.getpass):
         self._config = config
         self._executor = executor
         self._mutes = mutes
@@ -49,6 +51,7 @@ class Repl:
         self._confirmer = confirmer
         self._input_fn = input_fn
         self._sink = sink
+        self._getpass_fn = getpass_fn
         self._current_profile = config.profiles[config.default_profile]
         self._pending_offer = None  # (line, exit_code) or None
 
@@ -119,22 +122,56 @@ class Repl:
                 p = self._current_profile
                 self._sink.write_line(_profile_line(p))
             elif len(tokens) >= 2:
-                name = tokens[1]
-                if name in self._config.profiles:
-                    self._current_profile = self._config.profiles[name]
-                    p = self._current_profile
-                    self._sink.write_line(_profile_line(p))
-                else:
-                    self._sink.write_line(f"[sasha] unknown profile: {name}")
+                self._activate_profile(tokens[1])
         elif verb == "help":
             self._sink.write_line("[sasha] sasha mute <cmd> [<N>], "
                       "sasha unmute <cmd>, "
-                      "sasha profile [<name>], "
+                      "sasha profile [<name>] (asks for a key if needed), "
                       "?? <question>")
         else:
             self._sink.write_line(f"[sasha] unknown command: {rest}")
 
         return True
+
+    def _activate_profile(self, name):
+        if name not in self._config.profiles:
+            self._sink.write_line(f"[sasha] unknown profile: {name}")
+            return
+
+        profile = self._config.profiles[name]
+        if profile.api_key or not profile.api_key_required:
+            self._current_profile = profile
+            self._sink.write_line(_profile_line(profile))
+            return
+
+        if self._config.path is None:
+            self._sink.write_line(
+                "[sasha] couldn't save API key: no config file on disk "
+                "— profile unchanged")
+            return
+
+        self._sink.write_line(
+            f"[sasha] {name} has no API key configured. "
+            f"Paste it now (input hidden), or press Enter to cancel:")
+        key = self._getpass_fn("> ").strip()
+        if not key:
+            self._sink.write_line("[sasha] cancelled — profile unchanged")
+            return
+
+        try:
+            config.set_api_key(self._config.path, name, key)
+        except config.ConfigError as e:
+            self._sink.write_line(
+                f"[sasha] couldn't save API key: {e} — profile unchanged")
+            return
+
+        updated_profile = dataclasses.replace(profile, api_key=key)
+        updated_profiles = dict(self._config.profiles)
+        updated_profiles[name] = updated_profile
+        self._config = dataclasses.replace(self._config,
+                                            profiles=updated_profiles)
+        self._current_profile = updated_profile
+        self._sink.write_line(_profile_line(updated_profile))
 
     def run_once(self, line):
         stripped = line.strip()
