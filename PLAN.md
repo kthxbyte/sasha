@@ -83,6 +83,8 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [x] Task 16.1 — src/sasha/tools.py: Tool registry, ToolResult, 5 tools, path sandboxing
 - [x] Task 16.2 — agent.py registry-driven dispatch + generalized repetition guard + README
 
-## v2 (outline only — specced after v1 review)
+## Phase 17 — Project memory (git-repo-scoped long-term memory) (ISSUE-034)
 
-- Phase 17 — Session persistence & resume
+- [ ] Task 17.1 — src/sasha/memory.py + Executor.last_command/last_result ← current
+- [ ] Task 17.2 — remember tool (tools.py) + Session mutable memory block
+- [ ] Task 17.3 — repl.py: place-shift detection, commit hook, sasha memory/forget built-ins
