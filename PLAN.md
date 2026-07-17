@@ -80,8 +80,8 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 16 — Multi-tool registry & per-tool permissions (ISSUE-033)
 
-- [ ] Task 16.1 — src/sasha/tools.py: Tool registry, ToolResult, 5 tools, path sandboxing ← current
-- [ ] Task 16.2 — agent.py registry-driven dispatch + generalized repetition guard + README
+- [x] Task 16.1 — src/sasha/tools.py: Tool registry, ToolResult, 5 tools, path sandboxing
+- [ ] Task 16.2 — agent.py registry-driven dispatch + generalized repetition guard + README ← current
 
 ## v2 (outline only — specced after v1 review)
 
