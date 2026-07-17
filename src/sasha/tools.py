@@ -5,6 +5,7 @@ import pathlib
 import re
 from typing import Callable
 
+from sasha import memory
 from sasha.executor import Executor
 
 _READ_FILE_MAX_CHARS = 40000
@@ -132,6 +133,16 @@ def _search_files_handler(args: dict, executor: Executor) -> ToolResult:
     if total > _SEARCH_MAX_MATCHES:
         matches.append(f"... [{total - _SEARCH_MAX_MATCHES} more matches not shown]")
     return ToolResult("\n".join(matches))
+
+
+def _remember_handler(args: dict, executor: Executor) -> ToolResult:
+    root = memory.resolve_git_root(executor.cwd)
+    if root is None:
+        return ToolResult(
+            "not in a git-tracked directory — nothing to remember into")
+    note = args.get("note", "")
+    memory.encode_remember(root, note, executor.last_command, executor.last_result)
+    return ToolResult(f"remembered: {note}")
 
 
 REGISTRY: dict[str, Tool] = {
@@ -275,5 +286,33 @@ REGISTRY: dict[str, Tool] = {
         confirmation_summary=None,
         handler=_search_files_handler,
         repetition_key=lambda args: args,
+    ),
+    "remember": Tool(
+        name="remember",
+        schema={
+            "type": "function",
+            "function": {
+                "name": "remember",
+                "description": (
+                    "Save a durable note about this project for future "
+                    "sessions — a decision, a conclusion, a fact worth not "
+                    "re-discovering. Only takes effect in a git-tracked "
+                    "directory; has no effect otherwise. If a command has "
+                    "run recently, its exact output is automatically "
+                    "attached as a verbatim record."),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "note": {"type": "string",
+                                 "description": "one or two sentences: what's worth remembering and why"},
+                    },
+                    "required": ["note"],
+                },
+            },
+        },
+        requires_confirmation=False,
+        confirmation_summary=None,
+        handler=_remember_handler,
+        repetition_key=lambda args: args.get("note", ""),
     ),
 }

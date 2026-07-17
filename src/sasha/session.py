@@ -19,10 +19,10 @@ class Session:
                  personality: str = "") -> None:
         self.history_token_budget = history_token_budget
         self._personality = personality
+        self._memory_block: str = ""
         self.history: list[dict[str, Any]] = []  # Store message dicts
         self.notes: list[NoteCommand] = []  # Store note_command entries
         self.last_stderr: str = ""
-        self.system_prompt: str = self._build_system_prompt()
 
     def _build_system_prompt(self) -> str:
         functional = (
@@ -32,9 +32,22 @@ class Session:
             f"The platform is {platform.platform()}. "
             f"The shell is bash."
         )
+        parts = []
         if self._personality:
-            return f"{self._personality}\n\n{functional}"
-        return functional
+            parts.append(self._personality)
+        if self._memory_block:
+            parts.append(
+                f"What you remember about this project so far:\n"
+                f"{self._memory_block}")
+        parts.append(functional)
+        return "\n\n".join(parts)
+
+    @property
+    def system_prompt(self) -> str:
+        return self._build_system_prompt()
+
+    def set_memory(self, text: str) -> None:
+        self._memory_block = text
 
     def note_command(self, line: str, result: ExecResult) -> None:
         self.notes.append(NoteCommand(line, result.exit_code))
@@ -77,23 +90,19 @@ class Session:
         context_lines = [cwd]
         for note in self.notes:
             context_lines.append(f"{note.line} ({note.exit_code})")
-        
+
         if self.last_stderr:
             context_lines.append(self.last_stderr)
-        
+
         context_block = "\n".join(context_lines)
-        
+
         # Prepare to handle trimming and final user message
         history_to_trim = list(self.history)
-        
+
         # Determine if the last message is user and if so, define final_user_msg and base_text
         if history_to_trim and history_to_trim[-1].get("role") == "user":
             last_user_msg = history_to_trim.pop()
             base_text = last_user_msg.get("content", "")
-            # Final user message has context appended.
-            # We use \n if there is already content to separate them nicely.
-            # The spec doesn't specify, but "appended to its content" is the instruction.
-            # I'll use \n if base_text is not empty.
             final_user_msg = {
                 "role": "user",
                 "content": (base_text + "\n" + context_block) if base_text else context_block
@@ -102,10 +111,6 @@ class Session:
             base_text = ""
             final_user_msg = {"role": "user", "content": context_block}
 
-        # Trimming logic:
-        # "while the summed estimate of the history messages (including the final user message's base text, 
-        # excluding the context block) exceeds the budget, drop the oldest message"
-        
         def get_current_total_estimate() -> int:
             total = sum(self._estimate_tokens(m) for m in history_to_trim)
             total += math.ceil(len(base_text) / 4)
@@ -117,7 +122,6 @@ class Session:
                 tool_call_ids = {tc["id"] for tc in oldest["tool_calls"]}
                 history_to_trim = [m for m in history_to_trim if not (m.get("role") == "tool" and m.get("tool_call_id") in tool_call_ids)]
 
-        # Assemble messages: [system] + trimmed_history + [final_user]
         messages = [self.system_prompt_dict()] + history_to_trim + [final_user_msg]
         self.notes = []
         self.last_stderr = ""
