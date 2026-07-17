@@ -40,10 +40,12 @@ def _run(env, args=(), stdin="", cwd=None, timeout=30):
 # --- AC1 ---------------------------------------------------------------------
 
 def test_ac1_version(env_home):
+    # Amended by Tier 1 (2026-07-17): version bumped to 0.2.0 to mark the
+    # Phase 16 (multi-tool registry) milestone.
     home, env = env_home
     r = _run(env, ["--version"])
     assert r.returncode == 0
-    assert r.stdout.strip() == "sasha 0.1.0"
+    assert r.stdout.strip() == "sasha 0.2.0"
 
 
 # --- AC2 -----------------------------------------------------------------------

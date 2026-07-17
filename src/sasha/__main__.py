@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.version:
-        print("sasha 0.1.0")
+        print("sasha 0.2.0")
         return 0
 
     try:
