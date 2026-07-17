@@ -94,11 +94,15 @@ def _repl(stub_url, script=None):
     from sasha.repl import Repl
     from sasha.session import Session
 
+    # "other" carries a non-empty api_key so `sasha profile other` (AC7)
+    # switches immediately rather than triggering Task 15.2's masked
+    # key-entry prompt (ISSUE-026) — that prompt path is a new, separate
+    # contract covered by tests/contract/test_task_15_2_llm_setup_repl.py.
     profiles = {
         "stubprof": Profile(name="stubprof", base_url=stub_url,
                             model="stub-model", api_key=""),
         "other": Profile(name="other", base_url=stub_url,
-                         model="other-model", api_key=""),
+                         model="other-model", api_key="other-key"),
     }
     config = Config(default_profile="stubprof", profiles=profiles,
                     limits=Limits())

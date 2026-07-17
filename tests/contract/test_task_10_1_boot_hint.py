@@ -145,11 +145,15 @@ def test_ac4_profile_verb_switch_unchanged():
     from sasha.session import Session
 
     events = []
+    # "other" carries a non-empty api_key so this switch stays immediate
+    # rather than triggering Task 15.2's masked key-entry prompt
+    # (ISSUE-026) — that prompt path is a new, separate contract covered
+    # by tests/contract/test_task_15_2_llm_setup_repl.py.
     profiles = {
         "stubprof": Profile(name="stubprof", base_url="http://x/v1",
                              model="stub-model", api_key=""),
         "other": Profile(name="other", base_url="http://y/v1",
-                          model="other-model", api_key=""),
+                          model="other-model", api_key="other-key"),
     }
     config = Config(default_profile="stubprof", profiles=profiles,
                      limits=Limits())
