@@ -219,28 +219,40 @@ def test_ac4_default_template_is_valid():
     validate_template(DEFAULT_TEMPLATE)
 
 
-# --- AC5: DEFAULT_TEMPLATE byte-equivalence with today's hardcoded output --
+# --- AC5: DEFAULT_TEMPLATE renders the exact pinned default prompt --------
+# Amended by Tier 1 (2026-07-17): DEFAULT_TEMPLATE changed from Task 6.2's
+# single-color "\[green\]\u@\h:\w✦ \[reset\]" to a bash-PS1-style, multi-
+# segment "\[magenta\][sasha]\[reset\]\[yellow\]✦\[reset\] \[bold-green\]
+# \u@\h\[reset\]:\[bold-blue\]\w\[reset\] $ " — a deliberate default-look
+# change (Salvador's own edit), not a bug. These tests now pin the new
+# default exactly instead of proving equivalence with an old hardcoded
+# renderer that no longer represents the intended output.
 
-def test_ac5_default_template_matches_hardcoded_output_colored():
-    from sasha.prompt import DEFAULT_TEMPLATE, render
-    from sasha.repl import _PROMPT_COLOR, _RESET, _RL_IGNORE_END, _RL_IGNORE_START
+def test_ac5_default_template_renders_expected_output_colored():
+    from sasha.prompt import COLOR_TOKENS, DEFAULT_TEMPLATE, render
+    from sasha.prompt import _RL_IGNORE_END, _RL_IGNORE_START
 
     out = render(DEFAULT_TEMPLATE, user="alice", host="devbox",
                  cwd="/home/alice/project", home="/home/alice",
                  color_enabled=True)
-    expected = (f"{_RL_IGNORE_START}{_PROMPT_COLOR}{_RL_IGNORE_END}"
-                f"alice@devbox:~/project✦ "
-                f"{_RL_IGNORE_START}{_RESET}{_RL_IGNORE_END}")
+
+    def c(token):
+        return f"{_RL_IGNORE_START}{COLOR_TOKENS[token]}{_RL_IGNORE_END}"
+
+    expected = (f"{c('magenta')}[sasha]{c('reset')}"
+                f"{c('yellow')}✦{c('reset')} "
+                f"{c('bold-green')}alice@devbox{c('reset')}"
+                f":{c('bold-blue')}~/project{c('reset')} $ ")
     assert out == expected
 
 
-def test_ac5_default_template_matches_hardcoded_output_plain():
+def test_ac5_default_template_renders_expected_output_plain():
     from sasha.prompt import DEFAULT_TEMPLATE, render
 
     out = render(DEFAULT_TEMPLATE, user="alice", host="devbox",
                  cwd="/home/alice/project", home="/home/alice",
                  color_enabled=False)
-    assert out == "alice@devbox:~/project✦ "
+    assert out == "[sasha]✦ alice@devbox:~/project $ "
 
 
 # --- AC6: config.load() integration ---------------------------------------

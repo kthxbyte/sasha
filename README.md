@@ -82,21 +82,21 @@ Start Sasha:
 
 ```
 $ sasha
-~/project ✦ 
+[sasha]✦ user@host:~/project $ 
 ```
 
-The prompt shows your current working directory (with `$HOME` abbreviated to
-`~`) followed by ` ✦ `.
+The prompt shows a `[sasha]✦` tag, then `user@host`, then your current
+working directory (with `$HOME` abbreviated to `~`), bash-`PS1`-style.
 
 ### Normal commands
 
 Type any shell command and press Enter — it runs exactly as it would in bash:
 
 ```
-~/project ✦ ls
-~/project ✦ echo hello
-~/project ✦ cd /tmp
-/tmp ✦ 
+[sasha]✦ user@host:~/project $ ls
+[sasha]✦ user@host:~/project $ echo hello
+[sasha]✦ user@host:~/project $ cd /tmp
+[sasha]✦ user@host:/tmp $ 
 ```
 
 ### Explicit ask
@@ -104,7 +104,7 @@ Type any shell command and press Enter — it runs exactly as it would in bash:
 Prefix a line with `?? ` to consult the LLM directly:
 
 ```
-~/project ✦ ?? how do I find files larger than 100MB
+[sasha]✦ user@host:~/project $ ?? how do I find files larger than 100MB
 ```
 
 The LLM receives your shell context (cwd, recent commands, captured stderr) and

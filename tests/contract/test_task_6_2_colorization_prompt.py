@@ -142,6 +142,15 @@ def _repl_for_prompt(sink, cwd="/home/testuser/project"):
     return repl, input_fn
 
 
+# Amended by Tier 1 (2026-07-17): DEFAULT_TEMPLATE changed from Task 6.2's
+# single-color "\[green\]\u@\h:\w✦ \[reset\]" to a bash-PS1-style, multi-
+# segment "\[magenta\][sasha]\[reset\]\[yellow\]✦\[reset\] \[bold-green\]
+# \u@\h\[reset\]:\[bold-blue\]\w\[reset\] $ " — a deliberate default-look
+# change (Salvador's own edit), not a bug. These four tests now pin the
+# new default's exact output; the single-color-wrap shape they used to
+# assert no longer applies now that the prompt has four distinct color
+# segments instead of one uniform wrap.
+
 def test_ac4_prompt_includes_user_host(monkeypatch):
     import sasha.repl as repl_mod
 
@@ -154,7 +163,7 @@ def test_ac4_prompt_includes_user_host(monkeypatch):
 
     assert len(input_fn.prompts) == 1
     prompt = input_fn.prompts[0]
-    assert prompt == "alice@devbox:/home/testuser/project✦ "
+    assert prompt == "[sasha]✦ alice@devbox:/home/testuser/project $ "
 
 
 def test_ac4_prompt_abbreviates_home(monkeypatch):
@@ -169,12 +178,12 @@ def test_ac4_prompt_abbreviates_home(monkeypatch):
 
     repl.loop()
 
-    assert input_fn.prompts[0] == "alice@devbox:~/project✦ "
+    assert input_fn.prompts[0] == "[sasha]✦ alice@devbox:~/project $ "
 
 
 def test_ac4_prompt_colored_with_readline_markers(monkeypatch):
     import sasha.repl as repl_mod
-    from sasha.repl import _PROMPT_COLOR, _RESET, _RL_IGNORE_END, _RL_IGNORE_START
+    from sasha.prompt import COLOR_TOKENS, _RL_IGNORE_END, _RL_IGNORE_START
 
     monkeypatch.setattr(repl_mod.getpass, "getuser", lambda: "alice")
     monkeypatch.setattr(repl_mod.socket, "gethostname", lambda: "devbox")
@@ -184,15 +193,20 @@ def test_ac4_prompt_colored_with_readline_markers(monkeypatch):
     repl.loop()
 
     prompt = input_fn.prompts[0]
-    expected = (f"{_RL_IGNORE_START}{_PROMPT_COLOR}{_RL_IGNORE_END}"
-                f"alice@devbox:/tmp✦ "
-                f"{_RL_IGNORE_START}{_RESET}{_RL_IGNORE_END}")
+
+    def c(token):
+        return f"{_RL_IGNORE_START}{COLOR_TOKENS[token]}{_RL_IGNORE_END}"
+
+    expected = (f"{c('magenta')}[sasha]{c('reset')}"
+                f"{c('yellow')}✦{c('reset')} "
+                f"{c('bold-green')}alice@devbox{c('reset')}"
+                f":{c('bold-blue')}/tmp{c('reset')} $ ")
     assert prompt == expected
 
 
 def test_ac4_prompt_uncolored_when_color_disabled(monkeypatch):
     import sasha.repl as repl_mod
-    from sasha.repl import _RL_IGNORE_START
+    from sasha.prompt import _RL_IGNORE_START
 
     monkeypatch.setattr(repl_mod.getpass, "getuser", lambda: "alice")
     monkeypatch.setattr(repl_mod.socket, "gethostname", lambda: "devbox")
@@ -204,4 +218,4 @@ def test_ac4_prompt_uncolored_when_color_disabled(monkeypatch):
     prompt = input_fn.prompts[0]
     assert _RL_IGNORE_START not in prompt
     assert "\x1b[" not in prompt
-    assert prompt == "alice@devbox:/tmp✦ "
+    assert prompt == "[sasha]✦ alice@devbox:/tmp $ "

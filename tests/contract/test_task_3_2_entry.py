@@ -80,7 +80,11 @@ def test_ac4_prompt(env_home):
     home, env = env_home
     r = _run(env, stdin="exit\n", cwd=str(home))
     assert r.returncode == 0
-    assert "~✦ " in r.stdout
+    # Amended by Tier 1 (2026-07-17): DEFAULT_TEMPLATE changed — "✦" now
+    # renders near the front of the prompt (after "[sasha]"), not right
+    # before the trailing space, so the home-cwd abbreviation now shows up
+    # right before the trailing "$ " instead of right before "✦ ".
+    assert "~ $ " in r.stdout
 
 
 # --- AC5 -----------------------------------------------------------------------------
