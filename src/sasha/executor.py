@@ -45,10 +45,20 @@ class Executor:
         self._cwd = os.path.realpath(cwd)
         self._env = dict(env)
         self._stderr_capture_bytes = stderr_capture_bytes
+        self._last_command: str | None = None
+        self._last_result: ExecResult | None = None
 
     @property
     def cwd(self) -> str:
         return self._cwd
+
+    @property
+    def last_command(self) -> str | None:
+        return self._last_command
+
+    @property
+    def last_result(self) -> ExecResult | None:
+        return self._last_result
 
     def run(self, line: str, capture_stdout: bool = False) -> ExecResult:
         interactive = os.isatty(0)
@@ -354,7 +364,7 @@ class Executor:
                 out_capture = out_capture[-self._stderr_capture_bytes:]
             stdout_text = _sanitize(out_capture)
 
-        return ExecResult(
+        result = ExecResult(
             exit_code=exit_code,
             signal=signal_num,
             stderr_text=stderr_text,
@@ -363,6 +373,9 @@ class Executor:
             duration_ms=duration_ms,
             ctrl_z_terminated=ctrl_z_terminated,
         )
+        self._last_command = line
+        self._last_result = result
+        return result
 
     def _on_sigwinch(self, signum: int, frame: object) -> None:
         if os.isatty(2):
