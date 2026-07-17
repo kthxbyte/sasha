@@ -13,7 +13,11 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from sse_stub import StubServer  # noqa: E402
 
-STOP_LINE = "[sasha] stopping: repeated identical command / tool-turn limit reached"
+# Amended by Tier 1 for Task 16.2 (multi-tool registry): the repetition/
+# stop-loop guard generalizes from a raw command-string comparison to a
+# (tool_name, key) comparison, so "command" -> "action" in the wording.
+# See docs/superpowers/specs/task-16.2-agent-dispatch.md.
+STOP_LINE = "[sasha] stopping: repeated identical action / tool-turn limit reached"
 
 
 @pytest.fixture(autouse=True)
@@ -50,7 +54,11 @@ class ScriptedConfirmer:
 
 
 def _unknown(call_id):
-    return {"kind": "tool_call", "id": call_id, "name": "read_file",
+    # Amended by Tier 1 for Task 16.2: "read_file" is now a real registered
+    # tool (see sasha.tools.REGISTRY), so it can no longer stand in for an
+    # unrecognized tool name here — swapped for a name that is genuinely
+    # absent from the registry.
+    return {"kind": "tool_call", "id": call_id, "name": "delete_everything",
             "arguments": {"path": "/etc/passwd"}, "fragments": 2}
 
 
@@ -91,5 +99,5 @@ def test_ac2_unknown_tool_feedback_and_no_gate():
         tool_msgs = [m for m in second if m.get("role") == "tool"]
     assert confirmer.asked == []           # unknown tools never reach the gate
     assert len(tool_msgs) == 1
-    assert tool_msgs[0]["content"] == "Unknown tool: read_file"
+    assert tool_msgs[0]["content"] == "Unknown tool: delete_everything"
     assert tool_msgs[0]["tool_call_id"] == "call_a"

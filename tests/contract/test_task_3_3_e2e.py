@@ -203,7 +203,10 @@ def test_ac6_readme_documents_vocabulary():
         "press Enter to ask",
         "muting offers for",
         "unreachable:",
-        "stopping: repeated identical command",
+        # Amended by Tier 1 for Task 16.2 (multi-tool registry): stop-loop
+        # wording changes from "command" to "action" once the guard covers
+        # every tool, not just run_command.
+        "stopping: repeated identical action",
         "[sasha] profile:",
         "sasha: config error:",
         "deepseek",

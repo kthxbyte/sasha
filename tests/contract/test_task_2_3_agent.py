@@ -14,7 +14,11 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from sse_stub import StubServer, refused_base_url  # noqa: E402
 
-STOP_LINE = "[sasha] stopping: repeated identical command / tool-turn limit reached"
+# Amended by Tier 1 for Task 16.2 (multi-tool registry): the repetition/
+# stop-loop guard generalizes from a raw command-string comparison to a
+# (tool_name, key) comparison, so "command" -> "action" in the wording.
+# See docs/superpowers/specs/task-16.2-agent-dispatch.md.
+STOP_LINE = "[sasha] stopping: repeated identical action / tool-turn limit reached"
 
 
 class SpyExecutor:
@@ -118,7 +122,9 @@ def test_ac4_no_executes_nothing():
         _, executor, _, _ = _consult(stub.base_url, [("no", "")])
         tool_contents = _tool_message_contents(stub, 1)
     assert executor.calls == []
-    assert tool_contents == ["User declined to run this command."]
+    # Amended by Tier 1 for Task 16.2: "no" wording is now shared across
+    # every confirmation-gated tool, not run_command-specific.
+    assert tool_contents == ["User declined this action."]
 
 
 # --- AC5: reply -----------------------------------------------------------------------
@@ -129,8 +135,10 @@ def test_ac5_reply_never_executes():
             stub.base_url, [("reply", "use ripgrep instead")])
         tool_contents = _tool_message_contents(stub, 1)
     assert executor.calls == []
+    # Amended by Tier 1 for Task 16.2: "reply" wording is now shared across
+    # every confirmation-gated tool, not run_command-specific.
     assert tool_contents == [
-        "User did not run the command and replied: use ripgrep instead"]
+        "User did not run this and replied: use ripgrep instead"]
 
 
 # --- AC6: identical-command loop detection ------------------------------------------------
