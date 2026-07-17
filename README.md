@@ -76,16 +76,37 @@ cancels without switching. The key is written straight into `config.toml`
 (only that profile's `api_key` line changes — nothing else in the file is
 touched) so you only enter it once.
 
+## Personality
+
+Sasha reads `~/.config/sasha/PERSONALITY.md` and includes its content in the
+system prompt sent on every request. On first run, if the file doesn't
+exist, Sasha writes a default template for you (and says so, once) explaining
+what it's for — identity, tone, and behavior notes are all fair game. Edit it
+freely; changes take effect the next time you start Sasha. It's capped at
+8000 characters (an over-long file is truncated for that session, with a
+one-time notice). This only shapes tone — the confirmation gate and every
+other safety behavior described below is unconditional and unaffected by it.
+
 ## Usage
 
 Start Sasha:
 
 ```
 $ sasha
+
+ Profile    : llm7 (model: gpt-oss:20b)
+ API server : https://api.llm7.io/v1
+ Tip : type ?? followed by a question to chat with me directly
 [sasha]✦ user@host:~/project $ 
 ```
 
-The prompt shows a `[sasha]✦` tag, then `user@host`, then your current
+Sasha prints its active profile, the API endpoint, and a one-time tip about
+`??` once at the start of every session. On a genuinely first run, you'll
+also see one-time setup notices above the banner — `config.toml` and
+`PERSONALITY.md` both self-install and announce themselves the first time
+they're created.
+
+The prompt itself shows a `[sasha]✦` tag, then `user@host`, then your current
 working directory (with `$HOME` abbreviated to `~`), bash-`PS1`-style.
 
 ### Normal commands
@@ -198,6 +219,28 @@ Mute state is saved to `~/.local/state/sasha/mutes.json` and persists across
 sessions. Accepting an offer (pressing Enter) resets the ignore streak for
 that pair to zero.
 
+### Tab completion
+
+Press TAB like you would in bash. The first word on a line completes against
+`sasha`'s own built-ins (`mute`, `unmute`, `profile`, `help`), plus every
+executable on `$PATH`. Arguments to `sasha mute`/`sasha unmute` complete
+against currently-muted commands; arguments to `sasha profile` complete
+against your configured profile names. For everything else, Sasha shells out
+to your system's real bash-completion (so `git checkout <TAB>` and similar
+command-specific completions work exactly as they do in bash), falling back
+to plain filename completion if bash-completion isn't installed.
+
+### Job control
+
+Sasha doesn't implement job control (`fg`/`bg`/`jobs`) — there's no
+background-and-resume model. What it does guarantee: pressing Ctrl+Z never
+leaves a stopped, orphaned process behind. Instead of suspending, Sasha
+cleanly terminates the foreground command and prints
+`[sasha] Ctrl+Z not supported — command terminated`. Full-screen TUI programs
+(`vim`, `mc`, `htop`, and similar) get proper terminal control handed to them
+while running, so they render and receive input correctly — not something
+you'd get from a naive subprocess wrapper.
+
 ### Resilience
 
 If the LLM endpoint is down or unreachable, Sasha prints:
@@ -235,6 +278,7 @@ Command output is never prefixed or altered.
 | LLM unreachable | `[sasha] <profile> unreachable: <reason> — 'sasha profile <name>' to switch` |
 | Loop stopped | `[sasha] stopping: repeated identical action / tool-turn limit reached` |
 | Profile switch | `[sasha] profile: <name> (<model> @ <base_url>)` |
+| Ctrl+Z | `[sasha] Ctrl+Z not supported — command terminated` |
 | Bad config | `sasha: config error: <message>` (startup, exit 2) |
 
 ## State
@@ -243,3 +287,12 @@ Sasha writes its state to `~/.local/state/sasha/`:
 
 - `mutes.json` — mute counters (atomic write, survives corruption)
 - `history` — readline command history (1000-entry cap)
+
+Config and personality live separately, under `~/.config/sasha/`:
+
+- `config.toml` — profiles, limits, prompt template (see Configuration)
+- `PERSONALITY.md` — tone/character customization (see Personality)
+
+## License
+
+MIT — see [LICENSE](LICENSE).
