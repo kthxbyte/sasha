@@ -28,9 +28,12 @@ sasha
 
 Runs with the default profile (`llm7` — free, keyless, streaming, zero
 setup). First run self-installs `config.toml` and `PERSONALITY.md` for you.
+`python -m sasha` works identically — same entry point, invoked as a module
+instead of via the installed console script.
 
 ```
 sasha --profile local
+# or: python -m sasha --profile local
 ```
 
 Runs against the `local` profile instead of the default — point its
