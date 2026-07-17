@@ -20,6 +20,27 @@ pip install -e .
 This installs the `sasha` console script. The only dev dependency is `pytest`
 (`pip install -e .[dev]`). Run the full suite with `scripts/run-tests.sh`.
 
+## Quick start
+
+```
+sasha
+```
+
+Runs with the default profile (`llm7` — free, keyless, streaming, zero
+setup). First run self-installs `config.toml` and `PERSONALITY.md` for you.
+
+```
+sasha --profile local
+```
+
+Runs against the `local` profile instead of the default — point its
+`base_url` in `config.toml` at your own llama.cpp (or compatible) server
+first; see Configuration below. `--profile <name>` works with any profile
+you've defined, not just `local`.
+
+Other flags: `--config <path>` to use a config file somewhere other than
+`~/.config/sasha/config.toml`, `--version`, `-h`/`--help`.
+
 ## Configuration
 
 Sasha reads `~/.config/sasha/config.toml`. On first run, if the file doesn't
