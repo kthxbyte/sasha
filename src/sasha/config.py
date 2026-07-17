@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import os
 import pathlib
+import re
 import tomllib
 
 import sasha.prompt as prompt
@@ -14,6 +16,7 @@ class Profile:
     base_url: str
     model: str
     api_key: str
+    api_key_required: bool = True
 
 
 @dataclasses.dataclass(frozen=True)
@@ -30,26 +33,44 @@ class Config:
     profiles: dict[str, Profile]
     limits: Limits
     prompt: str = prompt.DEFAULT_TEMPLATE
+    path: pathlib.Path | None = None
+    notice: str | None = None
 
 
 class ConfigError(Exception):
     pass
 
 
-_DEFAULT_PROFILE_NAME = "deepseek"
+_DEFAULT_PROFILE_NAME = "llm7"
 
 _DEFAULT_PROFILE_FIELDS_BY_NAME = {
+    "llm7": {
+        "base_url": "https://api.llm7.io/v1",
+        "model": "gpt-oss:20b",
+        "api_key_env": "",
+        "api_key": "",
+        "api_key_required": False,
+    },
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini",
+        "api_key_env": "",
+        "api_key": "",
+        "api_key_required": True,
+    },
     "deepseek": {
         "base_url": "https://api.deepseek.com/v1",
         "model": "deepseek-chat",
         "api_key_env": "DEEPSEEK_API_KEY",
         "api_key": "",
+        "api_key_required": True,
     },
     "local": {
         "base_url": "http://192.168.8.253:11441/v1",
         "model": "local",
         "api_key_env": "",
         "api_key": "",
+        "api_key_required": False,
     },
 }
 
@@ -61,8 +82,43 @@ _VALID_LIMITS_FIELDS = {
     "mute_threshold",
 }
 
+_DEFAULT_CONFIG_TOML = """\
+# Sasha config — generated on first run. Edit freely; re-running Sasha
+# never overwrites this file. See README for the full option reference.
+default_profile = "llm7"
 
-def _resolve_api_key(profile_fields: dict[str, str]) -> str:
+# Free, keyless, streaming — works immediately, best-effort only (no
+# uptime guarantee from the provider). Switch anytime with
+# 'sasha profile <name>'; picking 'openai' or 'deepseek' below will ask
+# you to paste an API key.
+[profiles.llm7]
+base_url = "https://api.llm7.io/v1"
+model = "gpt-oss:20b"
+api_key = ""
+api_key_required = false
+
+[profiles.openai]
+base_url = "https://api.openai.com/v1"
+model = "gpt-4o-mini"
+api_key = ""
+api_key_required = true
+
+[profiles.deepseek]
+base_url = "https://api.deepseek.com/v1"
+model = "deepseek-chat"
+api_key_env = "DEEPSEEK_API_KEY"
+api_key = ""
+api_key_required = true
+
+[profiles.local]
+base_url = "http://192.168.8.253:11441/v1"
+model = "local"
+api_key = ""
+api_key_required = false
+"""
+
+
+def _resolve_api_key(profile_fields: dict) -> str:
     env_name = profile_fields.get("api_key_env", "")
     if env_name and os.environ.get(env_name):
         return os.environ[env_name]
@@ -79,7 +135,7 @@ def _default_config_path() -> pathlib.Path:
     return pathlib.Path.home() / ".config" / "sasha" / "config.toml"
 
 
-def _build_default_profiles() -> dict[str, dict[str, str]]:
+def _build_default_profiles() -> dict:
     return {
         name: dict(fields)
         for name, fields in _DEFAULT_PROFILE_FIELDS_BY_NAME.items()
@@ -94,35 +150,8 @@ def _merge_limits(defaults: Limits, overrides: dict) -> Limits:
     return Limits(**kwargs)
 
 
-def load(path: pathlib.Path | None = None) -> Config:
-    if path is None:
-        path = _default_config_path()
-
-    try:
-        with open(path, "rb") as f:
-            raw = tomllib.load(f)
-    except FileNotFoundError:
-        if path != _default_config_path():
-            raise ConfigError(
-                f"config file not found: {path}"
-            ) from None
-        return Config(
-            default_profile=_DEFAULT_PROFILE_NAME,
-            profiles={
-                name: Profile(
-                    name=name,
-                    base_url=pf["base_url"],
-                    model=pf["model"],
-                    api_key=_resolve_api_key(pf),
-                )
-                for name, pf in _DEFAULT_PROFILE_FIELDS_BY_NAME.items()
-            },
-            limits=Limits(),
-            prompt=prompt.DEFAULT_TEMPLATE,
-        )
-    except tomllib.TOMLDecodeError as exc:
-        raise ConfigError(str(exc)) from exc
-
+def _build_config(raw: dict, path: pathlib.Path | None,
+                   notice: str | None) -> Config:
     default_profile_name = raw.get("default_profile", _DEFAULT_PROFILE_NAME)
     if not isinstance(default_profile_name, str):
         default_profile_name = _DEFAULT_PROFILE_NAME
@@ -140,9 +169,15 @@ def load(path: pathlib.Path | None = None) -> Config:
     for name, table in raw.get("profiles", {}).items():
         if not isinstance(table, dict):
             continue
-        existing = profile_fields_by_name.get(name, {"base_url": "", "model": "", "api_key_env": "", "api_key": ""})
+        existing = profile_fields_by_name.get(
+            name,
+            {"base_url": "", "model": "", "api_key_env": "", "api_key": "",
+             "api_key_required": True},
+        )
         for key, value in table.items():
             if key in _VALID_PROFILE_FIELDS and isinstance(value, str):
+                existing[key] = value
+            elif key == "api_key_required" and isinstance(value, bool):
                 existing[key] = value
         profile_fields_by_name[name] = existing
 
@@ -160,6 +195,7 @@ def load(path: pathlib.Path | None = None) -> Config:
             base_url=pf["base_url"],
             model=pf["model"],
             api_key=_resolve_api_key(pf),
+            api_key_required=pf.get("api_key_required", True),
         )
 
     return Config(
@@ -167,4 +203,76 @@ def load(path: pathlib.Path | None = None) -> Config:
         profiles=profiles,
         limits=limits,
         prompt=prompt_template,
+        path=path,
+        notice=notice,
     )
+
+
+def load(path: pathlib.Path | None = None) -> Config:
+    if path is None:
+        path = _default_config_path()
+
+    try:
+        with open(path, "rb") as f:
+            raw = tomllib.load(f)
+    except FileNotFoundError:
+        if path != _default_config_path():
+            raise ConfigError(f"config file not found: {path}") from None
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(_DEFAULT_CONFIG_TOML)
+        except OSError:
+            notice = (f"[sasha] couldn't create {path} — using defaults "
+                       f"for this session only")
+            return _build_config({}, None, notice)
+        notice = (f"[sasha] created {path} — using the free 'llm7' tier; "
+                   f"'sasha profile openai' or 'sasha profile deepseek' "
+                   f"to switch and add your own key")
+        raw = tomllib.loads(_DEFAULT_CONFIG_TOML)
+        return _build_config(raw, path, notice)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(str(exc)) from exc
+
+    return _build_config(raw, path, None)
+
+
+def set_api_key(path: pathlib.Path, profile_name: str, api_key: str) -> None:
+    try:
+        text = path.read_text()
+    except OSError as exc:
+        raise ConfigError(f"couldn't read {path}: {exc}") from exc
+
+    lines = text.splitlines(keepends=True)
+    header = f"[profiles.{profile_name}]"
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip() == header:
+            start = i
+            break
+    if start is None:
+        raise ConfigError(f"no [profiles.{profile_name}] table in {path}")
+
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        stripped = lines[i].strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            end = i
+            break
+
+    key_line = f"api_key = {json.dumps(api_key)}\n"
+    key_re = re.compile(r"^\s*api_key\s*=")
+    found = None
+    for i in range(start + 1, end):
+        if key_re.match(lines[i]):
+            found = i
+            break
+
+    if found is not None:
+        lines[found] = key_line
+    else:
+        lines.insert(end, key_line)
+
+    try:
+        path.write_text("".join(lines))
+    except OSError as exc:
+        raise ConfigError(f"couldn't write {path}: {exc}") from exc
