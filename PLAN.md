@@ -75,8 +75,8 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 15 — First-run LLM setup & provider activation (ISSUE-026)
 
-- [ ] Task 15.1 — config.py: self-install, api_key_required, set_api_key patcher ← current
-- [ ] Task 15.2 — repl.py + __main__.py: masked key-entry flow on 'sasha profile <name>'
+- [x] Task 15.1 — config.py: self-install, api_key_required, set_api_key patcher
+- [ ] Task 15.2 — repl.py + __main__.py: masked key-entry flow on 'sasha profile <name>' ← current
 
 ## v2 (outline only — specced after v1 review)
 
