@@ -32,7 +32,11 @@ def test_ac1_defaults_when_no_config_file(isolated_env):
     from sasha.config import load
 
     cfg = load(None)
-    assert cfg.default_profile == "deepseek"
+    # Default profile changed to "llm7" by Task 15.1 (ISSUE-026) — a free,
+    # keyless, streaming-capable profile so Sasha works with zero setup.
+    # "deepseek" remains a valid, fully-specified profile, just no longer
+    # the default. See docs/superpowers/specs/2026-07-17-llm-setup-design.md.
+    assert cfg.default_profile == "llm7"
     assert set(cfg.profiles) >= {"deepseek", "local"}
 
     ds = cfg.profiles["deepseek"]

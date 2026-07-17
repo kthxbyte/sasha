@@ -73,7 +73,12 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 14.1 — build_messages() clears notes/last_stderr after use
 
+## Phase 15 — First-run LLM setup & provider activation (ISSUE-026)
+
+- [ ] Task 15.1 — config.py: self-install, api_key_required, set_api_key patcher ← current
+- [ ] Task 15.2 — repl.py + __main__.py: masked key-entry flow on 'sasha profile <name>'
+
 ## v2 (outline only — specced after v1 review)
 
-- Phase 15 — Multi-tool registry & per-tool permissions
-- Phase 16 — Session persistence & resume
+- Phase 16 — Multi-tool registry & per-tool permissions
+- Phase 17 — Session persistence & resume
