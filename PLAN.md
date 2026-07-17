@@ -85,6 +85,6 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 17 — Project memory (git-repo-scoped long-term memory) (ISSUE-034)
 
-- [ ] Task 17.1 — src/sasha/memory.py + Executor.last_command/last_result ← current
-- [ ] Task 17.2 — remember tool (tools.py) + Session mutable memory block
+- [x] Task 17.1 — src/sasha/memory.py + Executor.last_command/last_result
+- [ ] Task 17.2 — remember tool (tools.py) + Session mutable memory block ← current
 - [ ] Task 17.3 — repl.py: place-shift detection, commit hook, sasha memory/forget built-ins
