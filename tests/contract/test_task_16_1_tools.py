@@ -33,9 +33,13 @@ class FakeExecutor:
 # --- AC: registry shape -----------------------------------------------------
 
 def test_ac_registry_has_exactly_five_tools():
+    # Amended by Tier 1 for Task 17.2 (project memory): a sixth tool,
+    # "remember", is added to the registry. See
+    # docs/superpowers/specs/task-17.2-remember-tool.md.
     from sasha.tools import REGISTRY
     assert set(REGISTRY) == {
-        "run_command", "write_file", "read_file", "list_dir", "search_files"}
+        "run_command", "write_file", "read_file", "list_dir",
+        "search_files", "remember"}
 
 
 def test_ac_permission_fixed_by_tool_type():
