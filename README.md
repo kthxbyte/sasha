@@ -22,38 +22,59 @@ This installs the `sasha` console script. The only dev dependency is `pytest`
 
 ## Configuration
 
-Sasha reads `~/.config/sasha/config.toml`. If the file does not exist, built-in
-defaults are used:
+Sasha reads `~/.config/sasha/config.toml`. On first run, if the file doesn't
+exist, Sasha writes one for you (and says so, once) with four profiles:
 
 ```toml
-default_profile = "deepseek"
+default_profile = "llm7"
+
+[profiles.llm7]
+base_url = "https://api.llm7.io/v1"
+model = "gpt-oss:20b"
+api_key = ""
+api_key_required = false
+
+[profiles.openai]
+base_url = "https://api.openai.com/v1"
+model = "gpt-4o-mini"
+api_key = ""
+api_key_required = true
 
 [profiles.deepseek]
 base_url = "https://api.deepseek.com/v1"
 model = "deepseek-chat"
 api_key_env = "DEEPSEEK_API_KEY"
-# api_key = "sk-..."  # optional fallback literal
+api_key = ""
+api_key_required = true
 
 [profiles.local]
 base_url = "http://192.168.8.253:11441/v1"
 model = "local"
-api_key_env = ""
-
-[limits]
-history_tokens = 12000
-stderr_capture_bytes = 8192
-max_tool_turns = 10
-mute_threshold = 3
+api_key = ""
+api_key_required = false
 ```
 
-Two profiles are configured by default:
+`[limits]` isn't written by the self-installed file — it falls back to
+built-in defaults (`history_tokens = 12000`, `stderr_capture_bytes = 8192`,
+`max_tool_turns = 10`, `mute_threshold = 3`) unless you add the table
+yourself.
 
-- **deepseek** — the default, connects to `api.deepseek.com`. Requires
-  `DEEPSEEK_API_KEY` in the environment.
-- **local** — for a local llama.cpp server at `192.168.8.253:11441`. No API key
-  required.
+Four profiles are configured by default:
 
-You can switch profiles at runtime with `sasha profile <name>`.
+- **llm7** — the default. Free, keyless, streaming — works with zero setup.
+  Best-effort only; the provider gives no uptime guarantee.
+- **openai** — the right endpoint and model, no key yet.
+- **deepseek** — the right endpoint and model; also reads `DEEPSEEK_API_KEY`
+  from the environment if set.
+- **local** — for a local llama.cpp server at `192.168.8.253:11441`. No API
+  key required.
+
+Switch profiles at runtime with `sasha profile <name>`. If the profile needs
+a key it doesn't have (`api_key_required = true` and no key set), Sasha asks
+you to paste one — input is hidden, and pressing Enter with nothing typed
+cancels without switching. The key is written straight into `config.toml`
+(only that profile's `api_key` line changes — nothing else in the file is
+touched) so you only enter it once.
 
 ## Usage
 
