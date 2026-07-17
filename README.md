@@ -130,28 +130,48 @@ other purpose — the user wasn't running a real command, so spending tokens is
 appropriate. All other failures are zero-token offers: the user decides whether
 to consult.
 
+### Tools available to the LLM
+
+The LLM can call five tools, each with a permission fixed by its type — not
+configurable, not per-call:
+
+| Tool | Confirmation | Purpose |
+|---|---|---|
+| `run_command` | Confirms | Propose one bash command to run in your shell. |
+| `write_file` | Confirms | Write content to a file (creates parent directories; overwrites if it exists). Not sandboxed — same unrestricted-but-confirmed model as `run_command`. |
+| `read_file` | Auto-runs | Read a file's contents. Sandboxed to the current directory and below. |
+| `list_dir` | Auto-runs | List a directory's entries. Sandboxed to the current directory and below. |
+| `search_files` | Auto-runs | Regex search over file contents, recursively. Sandboxed to the current directory and below. |
+
+`read_file`, `list_dir`, and `search_files` run immediately with no prompt —
+a path that resolves outside the current directory is rejected with an error
+message the LLM can see and correct, never a silent no-op. All three cap
+their output (40000 characters for `read_file`, 200 entries for `list_dir`,
+100 matches for `search_files`) and note when they've truncated.
+
 ### Confirmation gate (safety guarantees)
 
-When the LLM proposes a command via `run_command`, Sasha never executes it
-automatically. You see a confirmation block:
+When the LLM proposes a mutating action (`run_command` or `write_file`),
+Sasha never executes it automatically. You see a confirmation block:
 
 ```
-[sasha] wants to run:  <command>
+[sasha] wants to run:  <command or action summary>
         └ <description>
         [y]es / [n]o / [e]dit — or type a reply
 ```
 
-- **`y`** or **`yes`** — run the command as proposed.
+- **`y`** or **`yes`** — run the action as proposed.
 - **`n`**, **`no`**, or **empty** — decline.
-- **`e`** or **`edit`** — edit the command before running it; Sasha shows a
-  readline-prefilled prompt with the proposed command.
+- **`e`** or **`edit`** — for `run_command` only, edit the command before
+  running it (Sasha shows a readline-prefilled prompt with the proposed
+  command); for `write_file`, treated the same as a free-text reply.
 - **Anything else** — treated as a free-text reply to the LLM. Free-text
   replies never execute anything; they are messages to the model, and the
   model may respond with more text or another proposal.
 
 If the model doesn't provide a description, `(no description provided)` is
-shown. The gate always applies — no command proposed by the LLM ever runs
-without your explicit confirmation.
+shown. The gate always applies — no mutating action proposed by the LLM ever
+runs without your explicit confirmation.
 
 ### Muting
 
@@ -191,11 +211,13 @@ command execution.
 
 ### Loop detection
 
-If the agent proposes the same command twice in a row or reaches the maximum
-tool-turn limit (10 by default), Sasha stops the loop:
+If the agent's most recently executed tool call is identical to the previous
+turn's (same tool, same key arguments — e.g. the same command, or the same
+`write_file` path and content) or the loop reaches the maximum tool-turn
+limit (10 by default), Sasha stops the loop:
 
 ```
-[sasha] stopping: repeated identical command / tool-turn limit reached
+[sasha] stopping: repeated identical action / tool-turn limit reached
 ```
 
 The agent does one final text-only call so the LLM can answer or explain
@@ -211,7 +233,7 @@ Command output is never prefixed or altered.
 | Offer | `[sasha] failed (exit N) — press Enter to ask` |
 | Auto-mute | `[sasha] muting offers for <cmd> exit <N> — 'sasha unmute <cmd>' to restore` |
 | LLM unreachable | `[sasha] <profile> unreachable: <reason> — 'sasha profile <name>' to switch` |
-| Loop stopped | `[sasha] stopping: repeated identical command / tool-turn limit reached` |
+| Loop stopped | `[sasha] stopping: repeated identical action / tool-turn limit reached` |
 | Profile switch | `[sasha] profile: <name> (<model> @ <base_url>)` |
 | Bad config | `sasha: config error: <message>` (startup, exit 2) |
 
