@@ -166,9 +166,12 @@ def test_ac7_turn_limit_stops_loop():
 # --- AC8: exact tool schema -------------------------------------------------------------------
 
 def test_ac8_tool_schema_exact():
-    from sasha.agent import RUN_COMMAND_TOOL
+    # Amended by Tier 1 for Task 16.1 (multi-tool registry): RUN_COMMAND_TOOL
+    # moves from sasha.agent into sasha.tools.REGISTRY["run_command"].schema.
+    # See docs/superpowers/specs/task-16.1-tools-registry.md.
+    from sasha.tools import REGISTRY
 
-    assert RUN_COMMAND_TOOL == {
+    assert REGISTRY["run_command"].schema == {
         "type": "function",
         "function": {
             "name": "run_command",

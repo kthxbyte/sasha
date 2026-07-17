@@ -78,7 +78,11 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [x] Task 15.1 — config.py: self-install, api_key_required, set_api_key patcher
 - [x] Task 15.2 — repl.py + __main__.py: masked key-entry flow on 'sasha profile <name>'
 
+## Phase 16 — Multi-tool registry & per-tool permissions (ISSUE-033)
+
+- [ ] Task 16.1 — src/sasha/tools.py: Tool registry, ToolResult, 5 tools, path sandboxing ← current
+- [ ] Task 16.2 — agent.py registry-driven dispatch + generalized repetition guard + README
+
 ## v2 (outline only — specced after v1 review)
 
-- Phase 16 — Multi-tool registry & per-tool permissions
 - Phase 17 — Session persistence & resume
