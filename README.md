@@ -13,12 +13,35 @@ context — and nothing the LLM proposes ever runs without your confirmation.
 
 ## Install
 
+On Debian/Ubuntu-family systems (Debian 12+, Ubuntu 23.04+, and derivatives
+like elementary OS), a plain `pip install -e .` will refuse with
+`externally-managed-environment` — [PEP
+668](https://peps.python.org/pep-0668/) blocks `pip` from writing into the
+same Python `apt` manages. Sasha is a zero-dependency CLI you want available
+everywhere, so [pipx](https://pipx.pypa.io/) — which installs it into its own
+isolated environment and puts just the `sasha` command on your `$PATH` — is
+the recommended way to install it:
+
 ```
-pip install -e .
+pipx install --editable .
 ```
 
-This installs the `sasha` console script. The only dev dependency is `pytest`
-(`pip install -e .[dev]`). Run the full suite with `scripts/run-tests.sh`.
+(`--editable` points pipx at this source tree instead of copying it, so
+changes to `src/sasha/` take effect immediately — useful if you're hacking
+on Sasha itself, harmless if you're not.)
+
+If you'd rather manage the environment yourself (e.g. to also install the
+`pytest` dev dependency), use a venv instead:
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+```
+
+Run the full suite with `scripts/run-tests.sh`. On a system that isn't
+externally-managed (or inside either environment above), the classic
+`pip install -e .` also works.
 
 ## Quick start
 
