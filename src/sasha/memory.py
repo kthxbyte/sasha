@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import shutil
+import signal
 import subprocess
 import time
 
@@ -27,53 +29,66 @@ def resolve_git_root(cwd: str) -> pathlib.Path | None:
     return pathlib.Path(path)
 
 
-def _memory_dir(repo_root: pathlib.Path) -> pathlib.Path:
+def _memory_root_for(repo_root: pathlib.Path) -> pathlib.Path:
     return repo_root / ".sasha" / "memory"
 
 
-def _semantic_path(repo_root: pathlib.Path) -> pathlib.Path:
-    return _memory_dir(repo_root) / "semantic.jsonl"
+def general_memory_root() -> pathlib.Path:
+    xdg = os.environ.get("XDG_CONFIG_HOME", "")
+    base = pathlib.Path(xdg) if xdg else pathlib.Path.home() / ".config"
+    return base / "sasha" / "memory"
+
+
+def _semantic_path(memory_root: pathlib.Path) -> pathlib.Path:
+    return memory_root / "semantic.jsonl"
+
+
+def _ensure_memory_dir_at(memory_root: pathlib.Path, *,
+                           gitignore: bool) -> tuple[pathlib.Path, bool]:
+    if memory_root.exists():
+        return memory_root, False
+    if gitignore:
+        gitignore_path = memory_root.parent / ".gitignore"
+        gitignore_path.parent.mkdir(parents=True, exist_ok=True)
+        gitignore_path.write_text("*\n")
+    memory_root.mkdir(parents=True, exist_ok=True)
+    (memory_root / "episodic").mkdir(exist_ok=True)
+    return memory_root, True
 
 
 def ensure_memory_dir(repo_root: pathlib.Path) -> tuple[pathlib.Path, bool]:
-    memory_dir = _memory_dir(repo_root)
-    if memory_dir.exists():
-        return memory_dir, False
-    gitignore = repo_root / ".sasha" / ".gitignore"
-    gitignore.parent.mkdir(parents=True, exist_ok=True)
-    gitignore.write_text("*\n")
-    memory_dir.mkdir(parents=True, exist_ok=True)
-    (memory_dir / "episodic").mkdir(exist_ok=True)
-    return memory_dir, True
+    return _ensure_memory_dir_at(_memory_root_for(repo_root), gitignore=True)
 
 
-def _append_entry(repo_root: pathlib.Path, kind: str, text: str,
-                   pointer: str | None) -> bool:
-    _, just_created = ensure_memory_dir(repo_root)
+def _append_entry_at(memory_root: pathlib.Path, kind: str, text: str,
+                      pointer: str | None, *, gitignore: bool) -> bool:
+    _, just_created = _ensure_memory_dir_at(memory_root, gitignore=gitignore)
     entry = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "kind": kind,
         "text": text,
         "pointer": pointer,
     }
-    path = _semantic_path(repo_root)
+    path = _semantic_path(memory_root)
     with open(path, "a") as f:
         f.write(json.dumps(entry) + "\n")
     return just_created
 
 
 def encode_commit(repo_root: pathlib.Path, message: str, commit_hash: str) -> bool:
-    return _append_entry(repo_root, "commit", message, commit_hash)
+    return _append_entry_at(_memory_root_for(repo_root), "commit", message,
+                             commit_hash, gitignore=True)
 
 
-def _write_episodic_log(repo_root: pathlib.Path, command: str,
-                         result: ExecResult) -> str:
-    memory_dir, _ = ensure_memory_dir(repo_root)
+def _write_episodic_log_at(memory_root: pathlib.Path, command: str,
+                            result: ExecResult, *, gitignore: bool,
+                            relative_to: pathlib.Path) -> str:
+    _ensure_memory_dir_at(memory_root, gitignore=gitignore)
     stamp = time.strftime("%Y-%m-%dT%H-%M-%SZ", time.gmtime())
-    log_path = memory_dir / "episodic" / f"{stamp}.log"
+    log_path = memory_root / "episodic" / f"{stamp}.log"
     counter = 1
     while log_path.exists():
-        log_path = memory_dir / "episodic" / f"{stamp}-{counter}.log"
+        log_path = memory_root / "episodic" / f"{stamp}-{counter}.log"
         counter += 1
     content = (
         f"command: {command}\n"
@@ -83,7 +98,7 @@ def _write_episodic_log(repo_root: pathlib.Path, command: str,
         f"--- stderr ---\n{result.stderr_text}\n"
     )
     log_path.write_text(content)
-    return str(log_path.relative_to(repo_root))
+    return str(log_path.relative_to(relative_to))
 
 
 def encode_remember(repo_root: pathlib.Path, note: str,
@@ -91,13 +106,27 @@ def encode_remember(repo_root: pathlib.Path, note: str,
                      last_result: ExecResult | None) -> bool:
     pointer = None
     if last_command is not None and last_result is not None:
-        pointer = _write_episodic_log(repo_root, last_command, last_result)
-    return _append_entry(repo_root, "remember", note, pointer)
+        pointer = _write_episodic_log_at(
+            _memory_root_for(repo_root), last_command, last_result,
+            gitignore=True, relative_to=repo_root)
+    return _append_entry_at(_memory_root_for(repo_root), "remember", note,
+                             pointer, gitignore=True)
 
 
-def load_memory_block(repo_root: pathlib.Path,
-                       max_chars: int = _MAX_MEMORY_CHARS) -> tuple[str, int]:
-    path = _semantic_path(repo_root)
+def encode_general_remember(note: str, last_command: str | None,
+                             last_result: ExecResult | None) -> bool:
+    root = general_memory_root()
+    pointer = None
+    if last_command is not None and last_result is not None:
+        pointer = _write_episodic_log_at(
+            root, last_command, last_result,
+            gitignore=False, relative_to=root)
+    return _append_entry_at(root, "remember", note, pointer, gitignore=False)
+
+
+def _load_memory_block_at(memory_root: pathlib.Path,
+                           max_chars: int) -> tuple[str, int]:
+    path = _semantic_path(memory_root)
     if not path.exists():
         return "", 0
     entries = []
@@ -122,6 +151,16 @@ def load_memory_block(repo_root: pathlib.Path,
     return "\n".join(kept), total
 
 
+def load_memory_block(repo_root: pathlib.Path,
+                       max_chars: int = _MAX_MEMORY_CHARS) -> tuple[str, int]:
+    return _load_memory_block_at(_memory_root_for(repo_root), max_chars)
+
+
+def load_general_memory_block(
+        max_chars: int = _MAX_MEMORY_CHARS) -> tuple[str, int]:
+    return _load_memory_block_at(general_memory_root(), max_chars)
+
+
 def encode_latest_commit(repo_root: pathlib.Path) -> bool | None:
     try:
         result = subprocess.run(
@@ -143,14 +182,17 @@ def encode_latest_commit(repo_root: pathlib.Path) -> bool | None:
     return encode_commit(repo_root, message, commit_hash)
 
 
+def _forget_at(memory_root: pathlib.Path) -> None:
+    if memory_root.exists():
+        shutil.rmtree(memory_root)
+
+
 def forget(repo_root: pathlib.Path) -> None:
-    memory_dir = _memory_dir(repo_root)
-    if memory_dir.exists():
-        shutil.rmtree(memory_dir)
+    _forget_at(_memory_root_for(repo_root))
 
 
-def most_recent_gist(repo_root: pathlib.Path) -> str | None:
-    path = _semantic_path(repo_root)
+def _most_recent_gist_at(memory_root: pathlib.Path) -> str | None:
+    path = _semantic_path(memory_root)
     if not path.exists():
         return None
     last_valid = None
@@ -166,3 +208,40 @@ def most_recent_gist(repo_root: pathlib.Path) -> str | None:
     if last_valid is None:
         return None
     return last_valid.get("text")
+
+
+def most_recent_gist(repo_root: pathlib.Path) -> str | None:
+    return _most_recent_gist_at(_memory_root_for(repo_root))
+
+
+_CRASH_SIGNALS = frozenset({
+    signal.SIGILL, signal.SIGABRT, signal.SIGFPE,
+    signal.SIGSEGV, signal.SIGBUS,
+})
+
+
+def is_crash_signal(signum: int | None) -> bool:
+    return signum in _CRASH_SIGNALS
+
+
+def _crash_text(command: str, result: ExecResult) -> str:
+    sig_name = signal.Signals(result.signal).name
+    return f"{command} crashed with {sig_name} (exit {result.exit_code})"
+
+
+def encode_crash(repo_root: pathlib.Path, command: str,
+                  result: ExecResult) -> bool:
+    pointer = _write_episodic_log_at(
+        _memory_root_for(repo_root), command, result,
+        gitignore=True, relative_to=repo_root)
+    return _append_entry_at(_memory_root_for(repo_root), "crash",
+                             _crash_text(command, result), pointer,
+                             gitignore=True)
+
+
+def encode_general_crash(command: str, result: ExecResult) -> bool:
+    root = general_memory_root()
+    pointer = _write_episodic_log_at(
+        root, command, result, gitignore=False, relative_to=root)
+    return _append_entry_at(root, "crash", _crash_text(command, result),
+                             pointer, gitignore=False)
