@@ -9,6 +9,7 @@ from typing import Protocol
 import sasha.config as config
 from sasha.agent import run_consult
 from sasha.llm import ChatError
+from sasha import memory
 from sasha.triggers import Decision, command_word, decide
 import sasha.prompt as prompt_mod
 
@@ -54,6 +55,9 @@ class Repl:
         self._getpass_fn = getpass_fn
         self._current_profile = config.profiles[config.default_profile]
         self._pending_offer = None  # (line, exit_code) or None
+        self._current_repo_root = None   # pathlib.Path | None
+        self._last_checked_cwd = None    # str | None
+        self._memory_dir_existed = False
 
     def _consult(self, auto_prompt=None):
         if auto_prompt:
@@ -70,6 +74,7 @@ class Repl:
                 f"{e.reason} — 'sasha profile <name>' to switch")
         finally:
             self._sink.ensure_newline()
+            self._check_memory_created()
 
     def _handle_pending_offer_ignore(self):
         if self._pending_offer is not None:
@@ -123,15 +128,100 @@ class Repl:
                 self._sink.write_line(_profile_line(p))
             elif len(tokens) >= 2:
                 self._activate_profile(tokens[1])
+        elif verb == "memory":
+            self._handle_memory_builtin()
+        elif verb == "forget":
+            self._handle_forget_builtin()
         elif verb == "help":
             self._sink.write_line("[sasha] sasha mute <cmd> [<N>], "
                       "sasha unmute <cmd>, "
                       "sasha profile [<name>] (asks for a key if needed), "
+                      "sasha memory, sasha forget, "
                       "?? <question>")
         else:
             self._sink.write_line(f"[sasha] unknown command: {rest}")
 
         return True
+
+    def _handle_memory_builtin(self):
+        if self._current_repo_root is None:
+            self._sink.write_line(
+                "[sasha] no project memory here — not inside a git repository")
+            return
+        block, count = memory.load_memory_block(
+            self._current_repo_root, max_chars=1_000_000)
+        if count == 0:
+            self._sink.write_line("[sasha] no memory yet for this project")
+            return
+        self._sink.write_line(
+            f"[sasha] memory: {count} entries for "
+            f"{self._current_repo_root.name}")
+        for entry_line in block.split("\n")[-10:]:
+            self._sink.write_line(f"[sasha]   {entry_line}")
+
+    def _handle_forget_builtin(self):
+        if self._current_repo_root is None:
+            self._sink.write_line(
+                "[sasha] nothing to forget — not inside a git repository")
+            return
+        _, count = memory.load_memory_block(
+            self._current_repo_root, max_chars=1_000_000)
+        if count == 0:
+            self._sink.write_line("[sasha] nothing to forget")
+            return
+        self._sink.write_line(
+            f"[sasha] this will permanently delete {count} memory "
+            f"entries for this project. Type 'yes' to confirm:")
+        response = self._input_fn("> ").strip()
+        if response != "yes":
+            self._sink.write_line("[sasha] cancelled")
+            return
+        memory.forget(self._current_repo_root)
+        self._session.set_memory("")
+        self._memory_dir_existed = False
+        self._sink.write_line("[sasha] forgotten")
+
+    def _check_place_shift(self):
+        cwd = self._executor.cwd
+        if cwd == self._last_checked_cwd:
+            return
+        self._last_checked_cwd = cwd
+        new_root = memory.resolve_git_root(cwd)
+        if new_root == self._current_repo_root:
+            return
+        self._current_repo_root = new_root
+        if new_root is None:
+            self._session.set_memory("")
+            self._memory_dir_existed = False
+            return
+        block, count = memory.load_memory_block(new_root)
+        self._session.set_memory(block)
+        self._memory_dir_existed = (new_root / ".sasha" / "memory").exists()
+        if count:
+            gist = memory.most_recent_gist(new_root)
+            self._sink.write_line(
+                f'[sasha] project: {new_root.name} ({count} memories, '
+                f'last: "{gist}")')
+
+    def _check_commit(self, line, result):
+        if result.exit_code != 0 or self._current_repo_root is None:
+            return
+        try:
+            tokens = shlex.split(line)
+        except ValueError:
+            return
+        if len(tokens) < 2 or tokens[0] != "git" or tokens[1] != "commit":
+            return
+        memory.encode_latest_commit(self._current_repo_root)
+
+    def _check_memory_created(self):
+        if self._current_repo_root is None or self._memory_dir_existed:
+            return
+        if (self._current_repo_root / ".sasha" / "memory").exists():
+            self._memory_dir_existed = True
+            self._sink.write_line(
+                "[sasha] created .sasha/memory/ — remembering context for "
+                "this project from now on (gitignored automatically)")
 
     def _activate_profile(self, name):
         if name not in self._config.profiles:
@@ -223,6 +313,10 @@ class Repl:
             self._sink.write_line("[sasha] Ctrl+Z not supported — command terminated")
             return True
 
+        self._check_place_shift()
+        self._check_commit(stripped, result)
+        self._check_memory_created()
+
         decision = decide(stripped, result, self._mutes)
         if decision == Decision.AUTO_CONSULT:
             self._consult()
@@ -240,6 +334,7 @@ class Repl:
         self._sink.write_line(_boot_api_line(p))
         self._sink.write_line(
             " Tip : type ?? followed by a question to chat with me directly")
+        self._check_place_shift()
         home = os.path.expanduser("~")
         user = getpass.getuser()
         host = socket.gethostname()

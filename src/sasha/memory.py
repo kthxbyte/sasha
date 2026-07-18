@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import shutil
 import subprocess
 import time
 
@@ -119,6 +120,33 @@ def load_memory_block(repo_root: pathlib.Path,
         used += len(rendered) + 1
     kept.reverse()
     return "\n".join(kept), total
+
+
+def encode_latest_commit(repo_root: pathlib.Path) -> bool | None:
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%H%n%B"],
+            cwd=str(repo_root), capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    output = result.stdout
+    newline_idx = output.find("\n")
+    if newline_idx == -1:
+        return None
+    commit_hash = output[:newline_idx].strip()
+    message = output[newline_idx + 1:].strip()
+    if not commit_hash or not message:
+        return None
+    return encode_commit(repo_root, message, commit_hash)
+
+
+def forget(repo_root: pathlib.Path) -> None:
+    memory_dir = _memory_dir(repo_root)
+    if memory_dir.exists():
+        shutil.rmtree(memory_dir)
 
 
 def most_recent_gist(repo_root: pathlib.Path) -> str | None:
