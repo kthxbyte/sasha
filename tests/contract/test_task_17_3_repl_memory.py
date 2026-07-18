@@ -336,16 +336,25 @@ def test_ac_creation_notice_fires_once_on_first_commit(tmp_path):
 
 # --- AC: sasha memory / sasha forget built-ins --------------------------------------
 
-def test_ac_sasha_memory_outside_git_repo(tmp_path):
+def test_ac_sasha_memory_outside_git_repo(monkeypatch, tmp_path):
+    # Amended by Tier 1 for Task 18.3 (general memory): outside a repo,
+    # sasha memory now shows general memory instead of a bare "not
+    # inside a git repository" message — general memory is always
+    # present as a fallback. See
+    # docs/superpowers/specs/task-18.3-repl-general-crash-wiring.md.
+    # XDG_CONFIG_HOME isolated to tmp_path so this never reads the real
+    # host's ~/.config/sasha/memory/.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     plain = tmp_path / "plain"
     plain.mkdir()
     repl, executor, sink = _repl(str(plain))
     repl._check_place_shift()
     repl.run_once("sasha memory")
-    assert any("not inside a git repository" in l for l in sink.lines)
+    assert any("no general memory yet" in l for l in sink.lines)
 
 
-def test_ac_sasha_memory_no_entries_yet(tmp_path):
+def test_ac_sasha_memory_no_entries_yet(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     repo = tmp_path / "repo"
     _init_repo(repo)
     repl, executor, sink = _repl(str(repo))
@@ -354,8 +363,9 @@ def test_ac_sasha_memory_no_entries_yet(tmp_path):
     assert any("no memory yet" in l for l in sink.lines)
 
 
-def test_ac_sasha_memory_shows_entries(tmp_path):
+def test_ac_sasha_memory_shows_entries(monkeypatch, tmp_path):
     from sasha.memory import encode_commit
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     repo = tmp_path / "repo"
     _init_repo(repo)
     encode_commit(repo, "a remembered thing", "h1")
