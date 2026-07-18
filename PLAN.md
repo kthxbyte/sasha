@@ -87,4 +87,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 17.1 — src/sasha/memory.py + Executor.last_command/last_result
 - [x] Task 17.2 — remember tool (tools.py) + Session mutable memory block
-- [ ] Task 17.3 — repl.py: place-shift detection, commit hook, sasha memory/forget built-ins ← current
+- [x] Task 17.3 — repl.py: place-shift detection, commit hook, sasha memory/forget built-ins
