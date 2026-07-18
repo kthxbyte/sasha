@@ -45,12 +45,12 @@ the moment.
   signal — encodes an entry with zero LLM involvement, same spirit as the
   `git commit` hook: a short auto-generated semantic gist plus a full
   verbatim episodic log.
-- A refactor of `memory.py`'s existing (Phase 17) functions to operate on
-  an already-resolved **memory root** directory (the exact directory
-  `semantic.jsonl`/`episodic/` live in) rather than a **git repo root**
-  they compute `.sasha/memory` from internally — see §4 and §6. This is
-  what lets project memory and general memory share one code path instead
-  of duplicating every function.
+- New `general_*`-prefixed sibling functions in `memory.py`
+  (`encode_general_remember`, `load_general_memory_block`,
+  `encode_general_crash`) alongside Phase 17's existing, **unmodified**
+  `encode_remember`/`load_memory_block`/etc. Both sets share the same
+  private read/write/cap logic internally (one source of truth, no
+  duplicated JSONL handling) — see §4 and §6.
 
 ### Out of scope / non-goals:
 - Letting `remember` (or the crash trigger) explicitly target general
@@ -88,12 +88,13 @@ the moment.
    general memory's location is a pure function of `XDG_CONFIG_HOME`/
    `$HOME` — it always exists as a target, even if nothing's been written
    there yet.
-2. **Memory functions operate on a memory root, not a repo root.** Every
-   function in `memory.py` that reads or writes `semantic.jsonl`/
-   `episodic/` takes the *exact* directory those live in as a parameter —
-   computing `<root>/.sasha/memory` from a git repo root is the *caller's*
-   job (via a new `project_memory_root(repo_root)` helper), not something
-   the shared read/write functions do internally anymore.
+2. **Phase 17's public `memory.py` functions keep their exact signatures
+   and behavior.** `encode_commit`, `encode_remember`, `load_memory_block`,
+   `most_recent_gist`, `ensure_memory_dir`, `forget`, `encode_latest_commit`
+   are untouched — still take `repo_root`, still compute `.sasha/memory`
+   internally, still git-ignore-protect it. General memory gets its own
+   `general_*`-prefixed siblings instead of the existing functions being
+   generalized to take an arbitrary root — see §4.
 3. **General memory is loaded once per session and updates in place.**
    It isn't re-resolved on place-shift the way project memory is (there's
    nothing to re-resolve — the root never changes) — it's loaded once,
@@ -132,20 +133,19 @@ addition to the `kind` vocabulary:
 
 `kind` is now one of `"commit"`, `"remember"`, or `"crash"`. `"commit"`'s
 `pointer` remains a git commit hash; `"remember"` and `"crash"` both
-point at an episodic log file path relative to the *memory root* — a
-shorter path than Phase 17 produced, since the root is no longer the
-repo root; see §6.5 for what this format change means in practice
-(nothing — no real data exists yet to migrate).
+point at an episodic log file path — for project memory, still relative
+to the repo root exactly as Phase 17 produced it (unchanged, since
+`encode_remember`'s internals aren't touched); for general memory,
+relative to the general memory root (there's no repo root to be relative
+to).
 
-**`memory.py`'s functions are refactored to a `memory_root:
-pathlib.Path` parameter** (the directory directly containing
-`semantic.jsonl`/`episodic/`) in place of today's `repo_root:
-pathlib.Path` (which internally computed `repo_root / ".sasha" /
-"memory"`). Two small new functions replace that internal computation,
-one per "place":
+**`memory.py` gains a private internal layer parameterized by an
+already-resolved directory**, and Phase 17's existing public functions
+become thin wrappers over it — their signatures and behavior are
+byte-identical to today's:
 
 ```python
-def project_memory_root(repo_root: pathlib.Path) -> pathlib.Path:
+def _memory_root_for(repo_root: pathlib.Path) -> pathlib.Path:
     return repo_root / ".sasha" / "memory"
 
 
@@ -153,16 +153,48 @@ def general_memory_root() -> pathlib.Path:
     xdg = os.environ.get("XDG_CONFIG_HOME", "")
     base = pathlib.Path(xdg) if xdg else pathlib.Path.home() / ".config"
     return base / "sasha" / "memory"
+
+
+def _ensure_memory_dir_at(memory_root: pathlib.Path, *,
+                           gitignore: bool) -> tuple[pathlib.Path, bool]:
+    ...  # today's ensure_memory_dir body, operating on memory_root
+         # directly; the .gitignore-write step is skipped when
+         # gitignore=False (general memory doesn't need it — see §2)
+
+
+def ensure_memory_dir(repo_root: pathlib.Path) -> tuple[pathlib.Path, bool]:
+    return _ensure_memory_dir_at(_memory_root_for(repo_root), gitignore=True)
 ```
 
-Every caller (the `remember` tool handler, `repl.py`'s place-shift/
-commit-hook/crash-hook/built-ins) computes the right root via one of
-these two functions and passes the *result* into `ensure_memory_dir`,
-`encode_commit`, `encode_remember`, `encode_latest_commit`,
-`load_memory_block`, `most_recent_gist`, and `forget` — none of which
-compute `.sasha/memory` internally anymore. `_memory_dir`/`_semantic_path`
-(today's private helpers) collapse into direct use of `memory_root` /
-`memory_root / "episodic"` / `memory_root / "semantic.jsonl"`.
+`encode_commit`, `encode_remember`, `load_memory_block`,
+`most_recent_gist`, `forget` all become similarly-thin wrappers: each
+keeps its exact existing signature, computes `_memory_root_for(repo_root)`
+internally, and delegates to a private `_..._at(memory_root, ...)`
+implementation. `encode_latest_commit` needs **no changes at all** — it
+already just calls `encode_commit(repo_root, ...)`, whose public contract
+doesn't change.
+
+The new `general_*` functions call the *same* private `_..._at` helpers,
+just with `general_memory_root()` (and `gitignore=False`) instead of
+`_memory_root_for(repo_root)`:
+
+```python
+def encode_general_remember(note: str, last_command: str | None,
+                             last_result: ExecResult | None) -> bool:
+    root = general_memory_root()
+    pointer = None
+    if last_command is not None and last_result is not None:
+        pointer = _write_episodic_log_at(root, last_command, last_result)
+    return _append_entry_at(root, "remember", note, pointer)
+
+
+def load_general_memory_block(max_chars: int = _MAX_MEMORY_CHARS) -> tuple[str, int]:
+    return _load_memory_block_at(general_memory_root(), max_chars)
+```
+
+One source of truth for the JSONL read/append/cap/gist logic; zero risk
+to Phase 17's shipped call sites or contract tests, since nothing they
+already call changes shape or behavior.
 
 **`Session` gains a second memory slot.** `set_memory` (Phase 17) is
 renamed `set_project_memory` for clarity now that there's a sibling; a
@@ -202,20 +234,26 @@ def loop(self):
 
 ### 5.2 Targeting rule (shared by `remember` and the crash trigger)
 
+No new abstraction needed — each call site just branches on whether a
+repo root is current, calling the bare (project-scoped) function or its
+`general_*` sibling:
+
 ```python
-def _current_memory_root(self) -> pathlib.Path:
-    if self._current_repo_root is not None:
-        return memory.project_memory_root(self._current_repo_root)
-    return memory.general_memory_root()
+# tools.py's remember handler
+def _remember_handler(args: dict, executor: Executor) -> ToolResult:
+    note = args.get("note", "")
+    root = memory.resolve_git_root(executor.cwd)
+    if root is not None:
+        memory.encode_remember(root, note, executor.last_command, executor.last_result)
+    else:
+        memory.encode_general_remember(note, executor.last_command, executor.last_result)
+    return ToolResult(f"remembered: {note}")
 ```
 
-`tools.py`'s `remember` handler needs the equivalent logic against
-`executor.cwd` directly (it doesn't have access to `Repl`'s tracked
-`_current_repo_root`) — resolving `resolve_git_root(executor.cwd)` fresh,
-same as it already does today, and falling back to
-`general_memory_root()` instead of returning the "not in a git-tracked
-directory" message it returns today. This is the behavior change to
-Phase 17's shipped tool — see §6.
+This *is* the behavior change to Phase 17's shipped tool flagged in §6 —
+today's handler returns early with "not in a git-tracked directory —
+nothing to remember into" when `root is None`; that branch is replaced
+with the `encode_general_remember` call above.
 
 ### 5.3 The crash trigger (`repl.py`, alongside the commit hook)
 
@@ -228,21 +266,35 @@ _CRASH_SIGNALS = frozenset({
 def _check_crash(self, line, result):
     if result.signal not in _CRASH_SIGNALS:
         return
-    root = self._current_memory_root()
-    memory.encode_crash(root, line, result)
+    if self._current_repo_root is not None:
+        memory.encode_crash(self._current_repo_root, line, result)
+    else:
+        memory.encode_general_crash(line, result)
 ```
 
-`memory.encode_crash(memory_root, command, result)`: writes the episodic
-log the same way `_write_episodic_log` already does for `remember`, then
-appends a semantic entry with an auto-generated gist:
+`memory.encode_crash(repo_root, command, result)` and
+`memory.encode_general_crash(command, result)` are a bare/`general_`
+pair exactly like `encode_remember`/`encode_general_remember` — both new
+(the crash trigger doesn't exist in Phase 17, so there's no backward
+compatibility to preserve here, just the same bare/`general_` naming
+convention), both thin wrappers over a shared private `_encode_crash_at
+(memory_root, command, result)`:
 
 ```python
-def encode_crash(memory_root: pathlib.Path, command: str,
-                  result: ExecResult) -> bool:
-    pointer = _write_episodic_log(memory_root, command, result)
+def _encode_crash_at(memory_root: pathlib.Path, command: str,
+                      result: ExecResult) -> bool:
+    pointer = _write_episodic_log_at(memory_root, command, result)
     sig_name = signal.Signals(result.signal).name
     text = f"{command} crashed with {sig_name} (exit {result.exit_code})"
-    return _append_entry(memory_root, "crash", text, pointer)
+    return _append_entry_at(memory_root, "crash", text, pointer)
+
+
+def encode_crash(repo_root: pathlib.Path, command: str, result: ExecResult) -> bool:
+    return _encode_crash_at(_memory_root_for(repo_root), command, result)
+
+
+def encode_general_crash(command: str, result: ExecResult) -> bool:
+    return _encode_crash_at(general_memory_root(), command, result)
 ```
 
 Called from `run_once`'s branch (e), alongside the existing
@@ -267,47 +319,46 @@ why its reach stays limited to project memory.
 
 ## 6. What changes in already-shipped Phase 17 code
 
-This is the part worth being explicit about, since it's not purely
-additive:
+Smaller than it might look — most of Phase 17's shipped surface is
+untouched:
 
-1. **`memory.py`'s public function signatures change** from `repo_root:
-   pathlib.Path` (git-repo-root, `.sasha/memory` computed internally) to
-   `memory_root: pathlib.Path` (the exact directory, computed by the
-   caller). Every existing call site (`tools.py`'s `remember` handler,
-   `repl.py`'s `_check_place_shift`/`_check_commit`/
-   `_handle_memory_builtin`/`_handle_forget_builtin`) needs updating to
-   compute the root via `project_memory_root(repo_root)` first. This is a
-   refactor of Task 17.1/17.3's shipped code, not new code layered on
-   top.
+1. **`memory.py`'s existing public functions are unmodified** —
+   `encode_commit`, `encode_remember`, `load_memory_block`,
+   `most_recent_gist`, `ensure_memory_dir`, `forget`,
+   `encode_latest_commit` keep their exact signatures and behavior (§4).
+   No existing `tests/contract/test_task_17_1_memory.py` assertion that
+   calls these directly needs to change.
 2. **`remember`'s behavior outside a git repo changes.** Today (Phase
    17) it returns `"not in a git-tracked directory — nothing to remember
    into"` and writes nothing. After this design, it writes to general
-   memory instead — the tool's description text needs updating to match
-   (it currently says "Only takes effect in a git-tracked directory; has
-   no effect otherwise," which becomes false).
+   memory instead (§5.2) — the tool's description text needs updating to
+   match (it currently says "Only takes effect in a git-tracked
+   directory; has no effect otherwise," which becomes false). This is
+   the one real behavior change to a Phase 17 call site, and it means
+   `tests/contract/test_task_17_2_remember_tool.py`'s
+   `test_ac_remember_outside_git_repo_writes_nothing` needs Tier-1
+   amendment — it currently asserts the old message and asserts nothing
+   is written; after this design, something *is* written, just to
+   general memory instead of nowhere.
 3. **`Session.set_memory` is renamed `set_project_memory`.** Its
    behavior for project memory is otherwise unchanged; this is a rename
    for clarity now that a sibling method exists, not a behavior change.
    `repl.py`'s Phase 17 call sites (`_check_place_shift`,
-   `_handle_forget_builtin`) need updating to the new name.
-4. **Existing contract tests pinning `repo_root`-shaped calls or the
-   old "not in a git-tracked directory" message will need Tier-1
-   amendment** at task-spec time — `tests/contract/test_task_17_1_memory.py`,
-   `test_task_17_2_remember_tool.py`, and `test_task_17_3_repl_memory.py`
-   all call today's function signatures directly and/or assert the old
-   `remember`-outside-a-repo message. This is flagged here so it isn't a
-   surprise when task specs amend them — same pattern as Phase 16's
-   `agent.py` rewrite amending Phase 2/3's stop-message tests.
-5. **Episodic pointer paths get shorter.** Today, a pointer is relative
-   to the repo root (`.sasha/memory/episodic/<stamp>.log`); after the
-   refactor it's relative to the memory root instead
-   (`episodic/<stamp>.log` — the `.sasha/memory/` prefix is gone, since
-   the memory root *is* `.sasha/memory/`). This is a real format change,
-   flagged here for correctness of the record — but not a migration
-   concern in practice: no `.sasha/memory/` directory exists anywhere yet
-   outside test fixtures (confirmed during the Phase 17 review — Sasha
-   hasn't been run as a real CLI against a real repo since that phase
-   shipped), so there's no real old-format data to migrate.
+   `_handle_forget_builtin`) and `tests/contract/test_task_17_2_remember_tool.py`'s
+   tests that call `set_memory` directly need updating to the new name —
+   a mechanical rename, not a behavior change, but still a Tier-1
+   contract-test amendment since it touches files under `tests/contract/`.
+4. **`sasha memory`'s "no project memory here" message outside a repo is
+   replaced** (§5.4) — `tests/contract/test_task_17_3_repl_memory.py`'s
+   `test_ac_sasha_memory_outside_git_repo` needs Tier-1 amendment to
+   match the new behavior (general memory is shown instead of a bare
+   "not inside a git repository" message).
+5. **Episodic pointer paths for project memory are unchanged** — since
+   `encode_remember`'s internals aren't touched, a project's pointers
+   stay relative to the repo root exactly as Phase 17 produced them.
+   Only *general* memory's pointers are new (relative to the general
+   memory root) — there's no prior format to be compatible with there,
+   since general memory doesn't exist until this phase.
 
 ## 7. Error handling
 
@@ -322,11 +373,17 @@ the shell:
 
 ## 8. Testing strategy
 
-- **`memory.py`'s refactored signatures**: every existing Phase 17 test
-  case (git-root resolution, lazy creation, encode/load/cap/gist,
-  concurrent appends) re-verified against the new `memory_root`-based
-  calls — behavior identical, only the parameter's computation moves to
-  the caller.
+- **Phase 17's existing memory.py tests are a pure regression guard
+  here** — since `encode_commit`/`encode_remember`/`load_memory_block`/
+  `most_recent_gist`/`ensure_memory_dir`/`forget`/`encode_latest_commit`
+  are unmodified, `test_task_17_1_memory.py` staying green unmodified
+  *is* the test that the wrapper refactor didn't change their behavior.
+- **The new `general_*` functions and the private `_..._at` layer**: the
+  same encode/load/cap/gist cases Phase 17 already covers for project
+  memory, re-run against `general_memory_root()` (with
+  `XDG_CONFIG_HOME` pointed at a `tmp_path` fixture, never the real
+  `~/.config`) — proving the shared private layer behaves identically
+  regardless of which public wrapper called it.
 - **`general_memory_root()`**: `XDG_CONFIG_HOME` set vs. unset, matching
   the existing pattern already used for `config.toml`/`PERSONALITY.md`'s
   own path tests.
@@ -372,10 +429,17 @@ the shell:
   **Rationale:** ambiguous with OOM kills, and literally overlaps
   Sasha's own Ctrl+Z termination mechanism, which already has its own
   dedicated message — including it would double-fire on every Ctrl+Z.
-- **Decision:** `memory.py`'s functions are refactored to take an
-  already-resolved `memory_root` rather than each "place" getting its
-  own duplicated set of functions. **Rationale:** avoids two near-
-  identical copies of the JSONL read/append/cap/gist logic that would
-  drift out of sync over time; the refactor's blast radius (Phase
-  17's existing call sites and tests) is real but bounded and worth
-  taking now rather than compounding later.
+- **Decision:** `memory.py` gains a private, memory-root-parameterized
+  internal layer, with Phase 17's existing public functions kept as
+  unmodified thin wrappers over it, rather than those functions
+  themselves being generalized to take an arbitrary root. **Rationale:**
+  caught while working out the task breakdown — the originally-committed
+  version of this doc had the existing functions changing shape
+  (`repo_root` → `memory_root`), which would have required amending
+  nearly every assertion in `test_task_17_1_memory.py` and several in
+  `test_task_17_2_remember_tool.py`/`test_task_17_3_repl_memory.py` for
+  zero behavioral gain. The wrapper approach gets the identical DRY
+  benefit (one source of truth for the JSONL read/append/cap/gist logic)
+  with a much smaller, more precisely bounded blast radius — see the
+  revised §6 for exactly what still changes (three call sites, not a
+  signature-wide rename).
