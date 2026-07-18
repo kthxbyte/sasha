@@ -93,4 +93,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 18.1 — memory.py: private _at layer, general_* functions, crash encode pair
 - [x] Task 18.2 — remember tool general-memory fallback + Session's second memory slot
-- [ ] Task 18.3 — repl.py: load general memory, crash-trigger hook, two-tier sasha memory ← current
+- [x] Task 18.3 — repl.py: load general memory, crash-trigger hook, two-tier sasha memory
