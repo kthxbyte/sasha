@@ -88,3 +88,9 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [x] Task 17.1 — src/sasha/memory.py + Executor.last_command/last_result
 - [x] Task 17.2 — remember tool (tools.py) + Session mutable memory block
 - [x] Task 17.3 — repl.py: place-shift detection, commit hook, sasha memory/forget built-ins
+
+## Phase 18 — General (cross-project) memory + crash trigger (ISSUE-036)
+
+- [ ] Task 18.1 — memory.py: private _at layer, general_* functions, crash encode pair ← current
+- [ ] Task 18.2 — remember tool general-memory fallback + Session's second memory slot
+- [ ] Task 18.3 — repl.py: load general memory, crash-trigger hook, two-tier sasha memory
