@@ -67,9 +67,11 @@ def test_ac_default_session_has_no_memory_block():
 
 
 def test_ac_set_memory_updates_system_prompt():
+    # Amended by Tier 1 for Task 18.2 (general memory): set_memory ->
+    # set_project_memory. See docs/superpowers/specs/task-18.2-remember-fallback-session.md.
     from sasha.session import Session
     s = Session()
-    s.set_memory("- [2026-07-17] Track Task 16.2")
+    s.set_project_memory("- [2026-07-17] Track Task 16.2")
     assert "Track Task 16.2" in s.system_prompt
     assert s.system_prompt == (
         "What you remember about this project so far:\n"
@@ -81,7 +83,7 @@ def test_ac_set_memory_is_live_not_fixed_at_construction():
     s = Session()
     before = s.system_prompt
     assert before == _FUNCTIONAL
-    s.set_memory("something worth remembering")
+    s.set_project_memory("something worth remembering")
     after = s.system_prompt
     assert before != after
     assert "something worth remembering" in after
@@ -90,14 +92,14 @@ def test_ac_set_memory_is_live_not_fixed_at_construction():
 def test_ac_set_memory_empty_string_same_as_default():
     from sasha.session import Session
     s = Session()
-    s.set_memory("")
+    s.set_project_memory("")
     assert s.system_prompt == _FUNCTIONAL
 
 
 def test_ac_memory_and_personality_both_present_personality_first():
     from sasha.session import Session
     s = Session(personality="Custom text")
-    s.set_memory("a remembered fact")
+    s.set_project_memory("a remembered fact")
     assert s.system_prompt == (
         "Custom text\n\n"
         "What you remember about this project so far:\n"
@@ -107,9 +109,9 @@ def test_ac_memory_and_personality_both_present_personality_first():
 def test_ac_system_prompt_dict_reflects_current_memory():
     from sasha.session import Session
     s = Session()
-    s.set_memory("fact one")
+    s.set_project_memory("fact one")
     assert "fact one" in s.system_prompt_dict()["content"]
-    s.set_memory("fact two")
+    s.set_project_memory("fact two")
     d = s.system_prompt_dict()
     assert "fact two" in d["content"]
     assert "fact one" not in d["content"]
@@ -150,14 +152,22 @@ def test_ac_remember_repetition_key_is_note_text():
 
 # --- AC: remember handler ----------------------------------------------------------
 
-def test_ac_remember_outside_git_repo_writes_nothing(tmp_path):
+def test_ac_remember_outside_git_repo_falls_back_to_general_memory(
+        monkeypatch, tmp_path):
+    # Amended by Tier 1 for Task 18.2 (general memory): remember() no
+    # longer no-ops outside a git repo — it now falls back to general
+    # memory. See docs/superpowers/specs/task-18.2-remember-fallback-session.md.
     from sasha.tools import REGISTRY
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     plain = tmp_path / "not-a-repo"
     plain.mkdir()
     executor = FakeExecutor(str(plain))
-    result = REGISTRY["remember"].handler({"note": "irrelevant"}, executor)
-    assert "not in a git-tracked directory" in result.text
+    result = REGISTRY["remember"].handler({"note": "a general fact"}, executor)
+    assert result.text == "remembered: a general fact"
     assert not (plain / ".sasha").exists()
+    general_semantic = tmp_path / "xdg" / "sasha" / "memory" / "semantic.jsonl"
+    assert general_semantic.exists()
+    assert "a general fact" in general_semantic.read_text()
 
 
 def test_ac_remember_inside_git_repo_appends_entry(tmp_path):
