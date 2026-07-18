@@ -19,7 +19,8 @@ class Session:
                  personality: str = "") -> None:
         self.history_token_budget = history_token_budget
         self._personality = personality
-        self._memory_block: str = ""
+        self._general_memory_block: str = ""
+        self._project_memory_block: str = ""
         self.history: list[dict[str, Any]] = []  # Store message dicts
         self.notes: list[NoteCommand] = []  # Store note_command entries
         self.last_stderr: str = ""
@@ -35,10 +36,14 @@ class Session:
         parts = []
         if self._personality:
             parts.append(self._personality)
-        if self._memory_block:
+        if self._general_memory_block:
+            parts.append(
+                f"What you generally remember (not project-specific):\n"
+                f"{self._general_memory_block}")
+        if self._project_memory_block:
             parts.append(
                 f"What you remember about this project so far:\n"
-                f"{self._memory_block}")
+                f"{self._project_memory_block}")
         parts.append(functional)
         return "\n\n".join(parts)
 
@@ -46,8 +51,11 @@ class Session:
     def system_prompt(self) -> str:
         return self._build_system_prompt()
 
-    def set_memory(self, text: str) -> None:
-        self._memory_block = text
+    def set_project_memory(self, text: str) -> None:
+        self._project_memory_block = text
+
+    def set_general_memory(self, text: str) -> None:
+        self._general_memory_block = text
 
     def note_command(self, line: str, result: ExecResult) -> None:
         self.notes.append(NoteCommand(line, result.exit_code))

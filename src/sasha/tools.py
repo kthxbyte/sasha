@@ -136,12 +136,12 @@ def _search_files_handler(args: dict, executor: Executor) -> ToolResult:
 
 
 def _remember_handler(args: dict, executor: Executor) -> ToolResult:
-    root = memory.resolve_git_root(executor.cwd)
-    if root is None:
-        return ToolResult(
-            "not in a git-tracked directory — nothing to remember into")
     note = args.get("note", "")
-    memory.encode_remember(root, note, executor.last_command, executor.last_result)
+    root = memory.resolve_git_root(executor.cwd)
+    if root is not None:
+        memory.encode_remember(root, note, executor.last_command, executor.last_result)
+    else:
+        memory.encode_general_remember(note, executor.last_command, executor.last_result)
     return ToolResult(f"remembered: {note}")
 
 
@@ -294,12 +294,12 @@ REGISTRY: dict[str, Tool] = {
             "function": {
                 "name": "remember",
                 "description": (
-                    "Save a durable note about this project for future "
-                    "sessions — a decision, a conclusion, a fact worth not "
-                    "re-discovering. Only takes effect in a git-tracked "
-                    "directory; has no effect otherwise. If a command has "
-                    "run recently, its exact output is automatically "
-                    "attached as a verbatim record."),
+                    "Save a durable note for future sessions — a decision, "
+                    "a conclusion, a fact worth not re-discovering. Saved "
+                    "against the current project if you're in a "
+                    "git-tracked directory, or as a general note otherwise. "
+                    "If a command has run recently, its exact output is "
+                    "automatically attached as a verbatim record."),
                 "parameters": {
                     "type": "object",
                     "properties": {

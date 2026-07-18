@@ -177,7 +177,7 @@ class Repl:
             self._sink.write_line("[sasha] cancelled")
             return
         memory.forget(self._current_repo_root)
-        self._session.set_memory("")
+        self._session.set_project_memory("")
         self._memory_dir_existed = False
         self._sink.write_line("[sasha] forgotten")
 
@@ -191,11 +191,11 @@ class Repl:
             return
         self._current_repo_root = new_root
         if new_root is None:
-            self._session.set_memory("")
+            self._session.set_project_memory("")
             self._memory_dir_existed = False
             return
         block, count = memory.load_memory_block(new_root)
-        self._session.set_memory(block)
+        self._session.set_project_memory(block)
         self._memory_dir_existed = (new_root / ".sasha" / "memory").exists()
         if count:
             gist = memory.most_recent_gist(new_root)
