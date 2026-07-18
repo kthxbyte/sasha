@@ -144,9 +144,17 @@ class Repl:
         return True
 
     def _handle_memory_builtin(self):
-        if self._current_repo_root is None:
+        general_block, general_count = memory.load_general_memory_block(
+            max_chars=1_000_000)
+        if general_count == 0:
+            self._sink.write_line("[sasha] no general memory yet")
+        else:
             self._sink.write_line(
-                "[sasha] no project memory here — not inside a git repository")
+                f"[sasha] general memory: {general_count} entries")
+            for entry_line in general_block.split("\n")[-10:]:
+                self._sink.write_line(f"[sasha]   {entry_line}")
+
+        if self._current_repo_root is None:
             return
         block, count = memory.load_memory_block(
             self._current_repo_root, max_chars=1_000_000)
@@ -154,7 +162,7 @@ class Repl:
             self._sink.write_line("[sasha] no memory yet for this project")
             return
         self._sink.write_line(
-            f"[sasha] memory: {count} entries for "
+            f"[sasha] project memory: {count} entries for "
             f"{self._current_repo_root.name}")
         for entry_line in block.split("\n")[-10:]:
             self._sink.write_line(f"[sasha]   {entry_line}")
@@ -213,6 +221,14 @@ class Repl:
         if len(tokens) < 2 or tokens[0] != "git" or tokens[1] != "commit":
             return
         memory.encode_latest_commit(self._current_repo_root)
+
+    def _check_crash(self, line, result):
+        if not memory.is_crash_signal(result.signal):
+            return
+        if self._current_repo_root is not None:
+            memory.encode_crash(self._current_repo_root, line, result)
+        else:
+            memory.encode_general_crash(line, result)
 
     def _check_memory_created(self):
         if self._current_repo_root is None or self._memory_dir_existed:
@@ -315,6 +331,7 @@ class Repl:
 
         self._check_place_shift()
         self._check_commit(stripped, result)
+        self._check_crash(stripped, result)
         self._check_memory_created()
 
         decision = decide(stripped, result, self._mutes)
@@ -334,6 +351,8 @@ class Repl:
         self._sink.write_line(_boot_api_line(p))
         self._sink.write_line(
             " Tip : type ?? followed by a question to chat with me directly")
+        general_block, _ = memory.load_general_memory_block()
+        self._session.set_general_memory(general_block)
         self._check_place_shift()
         home = os.path.expanduser("~")
         user = getpass.getuser()
