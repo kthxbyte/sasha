@@ -210,7 +210,7 @@ configurable, not per-call:
 | `read_file` | Auto-runs | Read a file's contents. Sandboxed to the current directory and below. |
 | `list_dir` | Auto-runs | List a directory's entries. Sandboxed to the current directory and below. |
 | `search_files` | Auto-runs | Regex search over file contents, recursively. Sandboxed to the current directory and below. |
-| `remember` | Auto-runs | Save a durable note about the current project for future sessions. Only takes effect in a git-tracked directory — see Project memory below. |
+| `remember` | Auto-runs | Save a durable note for future sessions — the current project's memory if you're in a git-tracked directory, general memory otherwise. See Memory below. |
 
 `read_file`, `list_dir`, and `search_files` run immediately with no prompt —
 a path that resolves outside the current directory is rejected with an error
@@ -218,46 +218,65 @@ message the LLM can see and correct, never a silent no-op. All three cap
 their output (40000 characters for `read_file`, 200 entries for `list_dir`,
 100 matches for `search_files`) and note when they've truncated.
 
-### Project memory
+### Memory
 
-Sasha remembers things about git-tracked projects, automatically, with zero
-setup — just working inside a repo is enough. Nothing is ever stored for a
-directory that isn't a git repository.
+Sasha remembers things automatically, with zero setup — two tiers, both
+always visible to the LLM at once:
 
-Two things trigger it:
+- **General memory** (`~/.config/sasha/memory/`) — not tied to any
+  project. Personal preferences, general facts — visible in every
+  session, everywhere, always.
+- **Project memory** (`<repo-root>/.sasha/memory/`) — scoped to whichever
+  git repository you're currently in. Swaps automatically as you `cd`
+  between projects (including in a second terminal); adds on top of
+  general memory, never replaces it. Nothing is ever stored for a
+  directory that isn't a git repository — those sessions fall back to
+  general memory instead.
 
-- **Every successful `git commit`** — the commit message becomes a
+Three things trigger encoding, only the last one costing an LLM call:
+
+- **Every successful `git commit`** (project memory only — there's no
+  general-memory equivalent of a commit) — the commit message becomes a
   remembered note, no LLM involved, no extra cost.
+- **A program crashing** — `SIGSEGV`, `SIGABRT`, `SIGBUS`, `SIGILL`, or
+  `SIGFPE` (real fault signals; Ctrl+Z and an OOM `SIGKILL` never
+  trigger this) — captured automatically and verbatim, into whichever
+  tier is currently active, no LLM involved.
 - **The LLM calling `remember`** — its own judgment about what's worth
   keeping (a conclusion, a decision, a preference you stated), or in
   response to you explicitly asking, e.g. `?? please remember that this
-  output looks like a bug`.
+  output looks like a bug`. Targets the current project's memory if
+  you're in one, general memory otherwise.
 
-Memory lives at `<repo-root>/.sasha/memory/` — `semantic.jsonl` for the
-notes themselves, `episodic/` for verbatim command records `remember`
-automatically attaches when a recent command is in scope. `.sasha/` is
-**always automatically git-ignored** the moment it's first created — a
-`.sasha/.gitignore` containing `*` is written before anything else, so it
-can never end up in a commit by accident.
+Project memory's `.sasha/` is **always automatically git-ignored** the
+moment it's first created — a `.sasha/.gitignore` containing `*` is
+written before anything else, so it can never end up in a commit by
+accident. General memory needs no such protection — `~/.config/sasha/`
+was never part of any project's git history to begin with. Both tiers
+share the same on-disk shape: `semantic.jsonl` for the notes themselves,
+`episodic/` for verbatim records that `remember`/the crash trigger attach
+when a command is in scope.
 
-Moving between projects (`cd`-ing into a different repo, including in a
-second terminal) swaps what Sasha remembers to match wherever you currently
-are:
+Moving between projects swaps what Sasha remembers to match wherever you
+currently are:
 
 ```
 [sasha] project: sasha (14 memories, last: "Track Task 17.3")
 ```
 
-The first time anything is ever remembered for a given repo, Sasha says so
-once:
+The first time anything is ever remembered for a given *project*, Sasha
+says so once (general memory currently self-installs silently — no
+equivalent notice yet):
 
 ```
 [sasha] created .sasha/memory/ — remembering context for this project from now on (gitignored automatically)
 ```
 
-`sasha memory` (show what's remembered) and `sasha forget` (permanently
-delete it, with confirmation) are built-in commands — see Built-in commands
-under Muting below.
+`sasha memory` (show what's remembered — general memory always, project
+memory too when you're in a repo) and `sasha forget` (permanently delete
+the *current project's* memory only; general memory isn't touched by it,
+by design) are built-in commands — see Built-in commands under Muting
+below.
 
 ### Confirmation gate (safety guarantees)
 
@@ -302,12 +321,12 @@ From then on, that command failing with that exit code produces no offer.
 - `sasha unmute <cmd> [<N>]` — unmute a command for a specific exit code `N`,
   or all exit codes if `N` is omitted.
 - `sasha profile [<name>]` — show current profile (`[sasha] profile: <name> (<model> @ <base_url>)`), or switch to `<name>`.
-- `sasha memory` — show how many entries are remembered for the current
-  project (see Project memory above) and the most recent ones. Says so if
-  you're not in a git repository, or if nothing's been remembered yet.
+- `sasha memory` — show general memory (always) and the current
+  project's memory (when you're in a git repository), each with an entry
+  count and the most recent ones — see Memory above.
 - `sasha forget` — permanently delete the current project's remembered
-  memory. Asks for confirmation first; nothing is deleted on any answer
-  other than `yes`.
+  memory only (general memory is untouched). Asks for confirmation
+  first; nothing is deleted on any answer other than `yes`.
 - `sasha help` — show available built-ins.
 
 Mute state is saved to `~/.local/state/sasha/mutes.json` and persists across
@@ -385,13 +404,16 @@ Sasha writes its state to `~/.local/state/sasha/`:
 - `mutes.json` — mute counters (atomic write, survives corruption)
 - `history` — readline command history (1000-entry cap)
 
-Config and personality live separately, under `~/.config/sasha/`:
+Config, personality, and general memory live separately, under
+`~/.config/sasha/`:
 
 - `config.toml` — profiles, limits, prompt template (see Configuration)
 - `PERSONALITY.md` — tone/character customization (see Personality)
+- `memory/semantic.jsonl` — general (cross-project) remembered notes
+- `memory/episodic/*.log` — general memory's verbatim command records
 
 Project memory lives with the project itself, not under your home
-directory's state/config folders — see Project memory above:
+directory's state/config folders — see Memory above:
 
 - `<repo-root>/.sasha/memory/semantic.jsonl` — remembered notes
 - `<repo-root>/.sasha/memory/episodic/*.log` — verbatim command records
