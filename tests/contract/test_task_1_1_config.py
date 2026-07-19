@@ -206,6 +206,9 @@ def _subproc_env():
 
 # Amended by Tier 1 (2026-07-17): version bumped to 0.2.0 to mark the
 # Phase 16 (multi-tool registry) milestone.
+# Amended by Tier 1 (2026-07-18): version bumped to 0.3.0 to mark the
+# Phase 17-19 milestone (project memory, general memory + crash trigger,
+# memory bootstrap + busy-star indicator).
 
 def test_ac5_version_flag_prints_version_and_exits_zero():
     r = subprocess.run(
@@ -213,14 +216,14 @@ def test_ac5_version_flag_prints_version_and_exits_zero():
         capture_output=True, text=True, env=_subproc_env(), timeout=30,
     )
     assert r.returncode == 0
-    assert r.stdout.strip() == "sasha 0.2.0"
+    assert r.stdout.strip() == "sasha 0.3.0"
 
 
 def test_ac5_pyproject_declares_packaging():
     data = tomllib.loads((REPO / "pyproject.toml").read_text())
     proj = data["project"]
     assert proj["name"] == "sasha"
-    assert proj["version"] == "0.2.0"
+    assert proj["version"] == "0.3.0"
     assert "3.11" in proj["requires-python"]
     assert not proj.get("dependencies")  # stdlib-only runtime
     assert "sasha" in proj["scripts"]
@@ -230,4 +233,4 @@ def test_ac5_pyproject_declares_packaging():
 def test_ac5_package_version():
     import sasha
 
-    assert sasha.__version__ == "0.2.0"
+    assert sasha.__version__ == "0.3.0"

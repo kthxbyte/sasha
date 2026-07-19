@@ -42,10 +42,13 @@ def _run(env, args=(), stdin="", cwd=None, timeout=30):
 def test_ac1_version(env_home):
     # Amended by Tier 1 (2026-07-17): version bumped to 0.2.0 to mark the
     # Phase 16 (multi-tool registry) milestone.
+    # Amended by Tier 1 (2026-07-18): version bumped to 0.3.0 to mark the
+    # Phase 17-19 milestone (project memory, general memory + crash
+    # trigger, memory bootstrap + busy-star indicator).
     home, env = env_home
     r = _run(env, ["--version"])
     assert r.returncode == 0
-    assert r.stdout.strip() == "sasha 0.2.0"
+    assert r.stdout.strip() == "sasha 0.3.0"
 
 
 # --- AC2 -----------------------------------------------------------------------
