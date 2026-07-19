@@ -99,4 +99,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 19.1 — memory.py: bounded_history, root_docs, encode_bootstrap, write lock
 - [x] Task 19.2 — prompt.py busy-star token (\S, blink) + Repl background-task counter
-- [ ] Task 19.3 — repl.py: stage 1/2 bootstrap wiring into _check_place_shift ← current
+- [x] Task 19.3 — repl.py: stage 1/2 bootstrap wiring into _check_place_shift
