@@ -1,9 +1,11 @@
 import dataclasses
 import getpass
 import os
+import re
 import shlex
 import socket
 import sys
+import threading
 from typing import Protocol
 
 import sasha.config as config
@@ -12,6 +14,9 @@ from sasha.llm import ChatError
 from sasha import memory
 from sasha.triggers import Decision, command_word, decide
 import sasha.prompt as prompt_mod
+
+
+_BULLET_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s*")
 
 
 class Sink(Protocol):
@@ -58,7 +63,9 @@ class Repl:
         self._current_repo_root = None   # pathlib.Path | None
         self._last_checked_cwd = None    # str | None
         self._memory_dir_existed = False
-        self._background_tasks = 0   # int — count of in-flight background jobs
+        self._background_tasks = 0
+        self._bootstrap_attempted = set()      # set[pathlib.Path]
+        self._last_bootstrap_thread = None     # threading.Thread | None, test seam
 
     def _consult(self, auto_prompt=None):
         if auto_prompt:
@@ -203,14 +210,114 @@ class Repl:
             self._session.set_project_memory("")
             self._memory_dir_existed = False
             return
+        just_bootstrapped = False
+        memory_dir = new_root / ".sasha" / "memory"
+        pending_marker = memory_dir / ".bootstrap_pending"
+        if not memory_dir.exists():
+            just_bootstrapped = self._bootstrap_repo(new_root)
+        elif new_root not in self._bootstrap_attempted and pending_marker.exists():
+            self._retry_bootstrap_summary(new_root)
         block, count = memory.load_memory_block(new_root)
         self._session.set_project_memory(block)
-        self._memory_dir_existed = (new_root / ".sasha" / "memory").exists()
-        if count:
+        self._memory_dir_existed = memory_dir.exists()
+        if count and not just_bootstrapped:
             gist = memory.most_recent_gist(new_root)
             self._sink.write_line(
                 f'[sasha] project: {new_root.name} ({count} memories, '
                 f'last: "{gist}")')
+
+    def _bootstrap_repo(self, repo_root):
+        history = memory.bounded_history(repo_root)
+        docs = memory.root_docs(repo_root)
+        if not history and not docs:
+            return False
+        memory.ensure_memory_dir(repo_root)
+        for commit_hash, message in reversed(history):
+            memory.encode_commit(repo_root, message, commit_hash)
+        self._sink.write_line(
+            f"[sasha] no memory yet for {repo_root.name} — building "
+            f"initial context from history in the background")
+        self._spawn_bootstrap_summary(repo_root, history, docs)
+        return True
+
+    def _retry_bootstrap_summary(self, repo_root):
+        history = memory.bounded_history(repo_root)
+        docs = memory.root_docs(repo_root)
+        if history or docs:
+            self._spawn_bootstrap_summary(repo_root, history, docs)
+        else:
+            self._bootstrap_attempted.add(repo_root)
+            self._clear_bootstrap_pending(repo_root)
+
+    def _spawn_bootstrap_summary(self, repo_root, history, docs):
+        self._bootstrap_attempted.add(repo_root)
+        (repo_root / ".sasha" / "memory" / ".bootstrap_pending").write_text("")
+        self._begin_background_task()
+        thread = threading.Thread(
+            target=self._bootstrap_stage_2,
+            args=(repo_root, history, docs), daemon=True)
+        self._last_bootstrap_thread = thread
+        thread.start()
+
+    def _bootstrap_stage_2(self, repo_root, history, docs):
+        try:
+            prompt = self._build_bootstrap_prompt(history, docs)
+            client = self._client_factory(self._current_profile)
+            response = client.chat(
+                [{"role": "user", "content": prompt}], [], lambda _: None)
+            lines = self._parse_bootstrap_lines(response.text)
+        except ChatError:
+            lines = []
+        if lines:
+            for line in lines:
+                memory.encode_bootstrap(repo_root, line)
+            self._sink.write_line(
+                self._bootstrap_finish_message(len(lines), history, docs))
+            self._clear_bootstrap_pending(repo_root)
+        self._end_background_task()
+
+    def _clear_bootstrap_pending(self, repo_root):
+        pending = repo_root / ".sasha" / "memory" / ".bootstrap_pending"
+        if pending.exists():
+            pending.unlink()
+
+    def _build_bootstrap_prompt(self, history, docs):
+        parts = [
+            "You are helping build initial long-term memory for a "
+            "software project neither of us has seen before. Read the "
+            "material below and respond with 3 to 8 short bullet lines "
+            "(one fact per line, starting with '- '), each a distinct, "
+            "concrete fact about what this project is or does. Do not "
+            "add any other text before, between, or after the bullets."
+        ]
+        if docs:
+            parts.append("### Project documentation")
+            for filename, content in docs:
+                parts.append(f"--- {filename} ---\n{content}")
+        if history:
+            parts.append("### Recent commit history")
+            for _, message in history:
+                parts.append(f"- {message}")
+        return "\n\n".join(parts)
+
+    def _parse_bootstrap_lines(self, text):
+        lines = []
+        for raw_line in text.splitlines():
+            stripped = _BULLET_RE.sub("", raw_line).strip()
+            if stripped:
+                lines.append(stripped)
+            if len(lines) == 8:
+                break
+        return lines
+
+    def _bootstrap_finish_message(self, count, history, docs):
+        if not history and len(docs) == 1:
+            return (f"[sasha] finished building context: {count} entries "
+                     f"(from {docs[0][0]})")
+        if not history and len(docs) > 1:
+            return (f"[sasha] finished building context: {count} entries "
+                     f"(from {len(docs)} files)")
+        return f"[sasha] finished building context: {count} entries"
 
     def _check_commit(self, line, result):
         if result.exit_code != 0 or self._current_repo_root is None:
