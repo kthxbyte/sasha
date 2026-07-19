@@ -96,26 +96,20 @@ def test_ac1_combined_template():
 # --- AC2: color tokens --------------------------------------------------
 
 def test_ac2_color_tokens_table_exact():
-    # Amended by Tier 1 for Task 19.2 (memory bootstrap design's busy-star
-    # indicator): COLOR_TOKENS gained a "blink" entry (SGR 5) — see
-    # docs/superpowers/specs/task-19.2-busy-star-indicator.md. This test's
-    # exact-dict/exact-count assertion is intentionally strict (a
-    # deliberate choice from Task 9.1), so it must be updated in lockstep
-    # whenever a new token is added — this is that update.
     from sasha.prompt import COLOR_TOKENS
 
     expected_base = {
         "black": "30", "red": "31", "green": "32", "yellow": "33",
         "blue": "34", "magenta": "35", "cyan": "36", "white": "37",
     }
-    expected = {"reset": "\x1b[0m", "blink": "\x1b[5m"}
+    expected = {"reset": "\x1b[0m"}
     for name, code in expected_base.items():
         expected[name] = f"\x1b[{code}m"
         expected[f"bold-{name}"] = f"\x1b[1;{code}m"
         expected[f"dim-{name}"] = f"\x1b[2;{code}m"
 
     assert COLOR_TOKENS == expected
-    assert len(COLOR_TOKENS) == 26
+    assert len(COLOR_TOKENS) == 25
 
 
 @pytest.mark.parametrize("token,code", [
