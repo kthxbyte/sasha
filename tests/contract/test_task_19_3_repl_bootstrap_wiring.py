@@ -35,6 +35,17 @@ def _commit(repo, message):
     _git(repo, "commit", "-q", "-m", message)
 
 
+def _commit_no_docs(repo, message):
+    # Tier 1 fix (Phase 19 review): _commit()'s target file, f.txt, has a
+    # .txt extension that root_docs() itself matches — any test that needs
+    # a real commit to exist *and* zero root docs (to isolate a
+    # history-only code path) can't use _commit() without contaminating
+    # its own premise. This variant commits to a non-doc extension instead.
+    (repo / "f.py").write_text(message)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+
+
 class FakeExecutor:
     def __init__(self, cwd):
         from sasha.executor import ExecResult
@@ -259,13 +270,30 @@ def test_ac5_finish_line_states_count_for_multiple_files(tmp_path):
 def test_ac5_finish_line_omits_file_mention_for_history_only(tmp_path):
     repo = tmp_path / "repo"
     _init_repo(repo)
-    _commit(repo, "initial commit")
+    _commit_no_docs(repo, "initial commit")
     with StubServer([{"kind": "text", "text": "- a fact"}]) as stub:
         repl, executor, sink = _repl(str(repo), stub_url=stub.base_url)
         repl._check_place_shift()
         _join_if_spawned(repl)
     finish_lines = [l for l in sink.lines if "finished building context" in l]
     assert finish_lines == ["[sasha] finished building context: 1 entries"]
+
+
+def test_ac5_finish_line_names_single_file_alongside_history(tmp_path):
+    # The realistic common case: a repo with both real commit history and
+    # exactly one root doc (e.g. a README) should still name that file —
+    # crediting docs must not depend on whether history is also present.
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _commit_no_docs(repo, "initial commit")
+    (repo / "README.md").write_text("about this project")
+    with StubServer([{"kind": "text", "text": "- a fact"}]) as stub:
+        repl, executor, sink = _repl(str(repo), stub_url=stub.base_url)
+        repl._check_place_shift()
+        _join_if_spawned(repl)
+    assert any(
+        l == "[sasha] finished building context: 1 entries (from README.md)"
+        for l in sink.lines)
 
 
 # --- AC6-7: stage 2 failure ------------------------------------------------------

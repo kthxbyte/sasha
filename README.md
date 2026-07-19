@@ -154,7 +154,10 @@ also see one-time setup notices above the banner — `config.toml` and
 they're created.
 
 The prompt itself shows a `[sasha]✦` tag, then `user@host`, then your current
-working directory (with `$HOME` abbreviated to `~`), bash-`PS1`-style.
+working directory (with `$HOME` abbreviated to `~`), bash-`PS1`-style. The
+star blinks whenever Sasha is doing background work — currently, that's
+only the initial-memory bootstrap described under Memory below — and sits
+static the rest of the time.
 
 ### Normal commands
 
@@ -264,13 +267,45 @@ currently are:
 [sasha] project: sasha (14 memories, last: "Track Task 17.3")
 ```
 
-The first time anything is ever remembered for a given *project*, Sasha
-says so once (general memory currently self-installs silently — no
-equivalent notice yet):
+The first time anything is ever remembered for a given *project* with no
+prior history to bootstrap from (see below), Sasha says so once (general
+memory currently self-installs silently — no equivalent notice yet):
 
 ```
 [sasha] created .sasha/memory/ — remembering context for this project from now on (gitignored automatically)
 ```
+
+#### Bootstrapping memory for an existing project
+
+The first time Sasha enters a git repository that already has real
+history to learn from — commits, or root-level docs (`README.md` and
+other `.md`/`.txt`/`.htm(l)` files directly at the repo root) — it builds
+a running start automatically, in two stages, instead of starting from
+nothing:
+
+1. **Instant, mechanical**: recent commit messages are replayed into
+   project memory, exactly as if they'd been encoded as they happened.
+2. **Background, LLM-driven**: those same commits plus any root docs are
+   summarized into a handful of higher-level facts — without blocking
+   the shell. You'll see:
+
+```
+[sasha] no memory yet for sasha — building initial context from history in the background
+```
+
+...and the `[sasha]✦` star blinks while it works. When it finishes:
+
+```
+[sasha] finished building context: 6 entries (from README.md)
+```
+
+(naming the file when exactly one root doc contributed, a bare count for
+several, nothing at all if the summary came from commit history alone).
+If the LLM step can't complete — no profile configured, network down —
+the mechanical replay still stands; nothing is lost, and a later session
+gets one more automatic attempt. A repo with neither commits nor root
+docs is left completely untouched, exactly as if this feature didn't
+exist.
 
 `sasha memory` (show what's remembered — general memory always, project
 memory too when you're in a repo) and `sasha forget` (permanently delete

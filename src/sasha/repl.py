@@ -272,7 +272,7 @@ class Repl:
             for line in lines:
                 memory.encode_bootstrap(repo_root, line)
             self._sink.write_line(
-                self._bootstrap_finish_message(len(lines), history, docs))
+                self._bootstrap_finish_message(len(lines), docs))
             self._clear_bootstrap_pending(repo_root)
         self._end_background_task()
 
@@ -310,11 +310,11 @@ class Repl:
                 break
         return lines
 
-    def _bootstrap_finish_message(self, count, history, docs):
-        if not history and len(docs) == 1:
+    def _bootstrap_finish_message(self, count, docs):
+        if len(docs) == 1:
             return (f"[sasha] finished building context: {count} entries "
                      f"(from {docs[0][0]})")
-        if not history and len(docs) > 1:
+        if len(docs) > 1:
             return (f"[sasha] finished building context: {count} entries "
                      f"(from {len(docs)} files)")
         return f"[sasha] finished building context: {count} entries"
