@@ -58,6 +58,7 @@ class Repl:
         self._current_repo_root = None   # pathlib.Path | None
         self._last_checked_cwd = None    # str | None
         self._memory_dir_existed = False
+        self._background_tasks = 0   # int — count of in-flight background jobs
 
     def _consult(self, auto_prompt=None):
         if auto_prompt:
@@ -239,6 +240,12 @@ class Repl:
                 "[sasha] created .sasha/memory/ — remembering context for "
                 "this project from now on (gitignored automatically)")
 
+    def _begin_background_task(self):
+        self._background_tasks += 1
+
+    def _end_background_task(self):
+        self._background_tasks = max(0, self._background_tasks - 1)
+
     def _activate_profile(self, name):
         if name not in self._config.profiles:
             self._sink.write_line(f"[sasha] unknown profile: {name}")
@@ -361,7 +368,8 @@ class Repl:
             cwd = self._executor.cwd
             rendered = prompt_mod.render(
                 self._config.prompt, user=user, host=host, cwd=cwd,
-                home=home, color_enabled=self._sink.color_enabled)
+                home=home, color_enabled=self._sink.color_enabled,
+                busy=self._background_tasks > 0)
             try:
                 line = self._input_fn(rendered)
             except EOFError:
