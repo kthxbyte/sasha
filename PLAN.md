@@ -94,3 +94,9 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [x] Task 18.1 — memory.py: private _at layer, general_* functions, crash encode pair
 - [x] Task 18.2 — remember tool general-memory fallback + Session's second memory slot
 - [x] Task 18.3 — repl.py: load general memory, crash-trigger hook, two-tier sasha memory
+
+## Phase 19 — Memory bootstrap from git history (ISSUE-038)
+
+- [ ] Task 19.1 — memory.py: bounded_history, root_docs, encode_bootstrap, write lock ← current
+- [ ] Task 19.2 — prompt.py busy-star token (\S, blink) + Repl background-task counter
+- [ ] Task 19.3 — repl.py: stage 1/2 bootstrap wiring into _check_place_shift
