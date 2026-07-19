@@ -6,11 +6,14 @@ import pathlib
 import shutil
 import signal
 import subprocess
+import threading
 import time
 
 from sasha.executor import ExecResult
 
 _MAX_MEMORY_CHARS = 8000
+
+_WRITE_LOCK = threading.Lock()
 
 
 def resolve_git_root(cwd: str) -> pathlib.Path | None:
@@ -62,22 +65,32 @@ def ensure_memory_dir(repo_root: pathlib.Path) -> tuple[pathlib.Path, bool]:
 
 def _append_entry_at(memory_root: pathlib.Path, kind: str, text: str,
                       pointer: str | None, *, gitignore: bool) -> bool:
-    _, just_created = _ensure_memory_dir_at(memory_root, gitignore=gitignore)
-    entry = {
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "kind": kind,
-        "text": text,
-        "pointer": pointer,
-    }
-    path = _semantic_path(memory_root)
-    with open(path, "a") as f:
-        f.write(json.dumps(entry) + "\n")
-    return just_created
+    with _WRITE_LOCK:
+        _, just_created = _ensure_memory_dir_at(memory_root, gitignore=gitignore)
+        entry = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "kind": kind,
+            "text": text,
+            "pointer": pointer,
+        }
+        path = _semantic_path(memory_root)
+        with open(path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+        return just_created
 
 
 def encode_commit(repo_root: pathlib.Path, message: str, commit_hash: str) -> bool:
     return _append_entry_at(_memory_root_for(repo_root), "commit", message,
                              commit_hash, gitignore=True)
+
+
+def encode_bootstrap(repo_root: pathlib.Path, text: str) -> bool:
+    """Appends one kind="bootstrap" semantic entry with pointer=None.
+    Returns True iff this call is what just created .sasha/memory/ for
+    this repo (same just_created convention as encode_commit/
+    encode_remember)."""
+    return _append_entry_at(_memory_root_for(repo_root), "bootstrap", text,
+                             None, gitignore=True)
 
 
 def _write_episodic_log_at(memory_root: pathlib.Path, command: str,
@@ -159,6 +172,75 @@ def load_memory_block(repo_root: pathlib.Path,
 def load_general_memory_block(
         max_chars: int = _MAX_MEMORY_CHARS) -> tuple[str, int]:
     return _load_memory_block_at(general_memory_root(), max_chars)
+
+
+def bounded_history(repo_root: pathlib.Path,
+                     max_chars: int = 10_000) -> list[tuple[str, str]]:
+    """Newest-first list of (commit_hash, full_message) pairs, read via
+    one `git log` call, accumulated until the next commit's message would
+    push the running total past max_chars — except the first (newest)
+    commit is always included regardless of size. Returns [] if the repo
+    has no commits, `git` is missing, or the subprocess fails/times out.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "log", "--format=%H%x1f%B%x1e"],
+            cwd=str(repo_root), capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    kept: list[tuple[str, str]] = []
+    used = 0
+    for piece in result.stdout.split("\x1e"):
+        if "\x1f" not in piece:
+            continue
+        commit_hash, _, message = piece.partition("\x1f")
+        commit_hash = commit_hash.strip()
+        message = message.strip()
+        if kept and used + len(message) > max_chars:
+            break
+        kept.append((commit_hash, message))
+        used += len(message)
+    return kept
+
+
+def root_docs(repo_root: pathlib.Path,
+              max_chars: int = 6_000) -> list[tuple[str, str]]:
+    """Newest-mtime-first list of (filename, content) pairs for every
+    regular file directly under repo_root (non-recursive) whose extension,
+    lowercased, is one of .md, .txt, .htm, .html. Accumulates full file
+    contents until the next file's content would push the running total
+    past max_chars — except the first (newest-mtime) file is always
+    included regardless of size. A file that can't be read (permission
+    error, race with deletion) is skipped individually; the rest of the
+    scan still proceeds. Returns [] if no matching files exist.
+    """
+    candidates: list[tuple[float, pathlib.Path]] = []
+    try:
+        entries = list(repo_root.iterdir())
+    except OSError:
+        return []
+    for p in entries:
+        try:
+            if p.is_file() and p.suffix.lower() in {".md", ".txt", ".htm", ".html"}:
+                candidates.append((p.stat().st_mtime, p))
+        except OSError:
+            continue
+    candidates.sort(key=lambda pair: pair[0], reverse=True)
+    kept: list[tuple[str, str]] = []
+    used = 0
+    for _, p in candidates:
+        try:
+            content = p.read_text()
+        except (OSError, UnicodeDecodeError):
+            continue
+        if kept and used + len(content) > max_chars:
+            break
+        kept.append((p.name, content))
+        used += len(content)
+    return kept
 
 
 def encode_latest_commit(repo_root: pathlib.Path) -> bool | None:
