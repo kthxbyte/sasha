@@ -1,19 +1,5 @@
 # Task 19.2: prompt.py busy-star token (\S, blink) + Repl background-task counter
 
-## Tier 1 pre-dispatch step — required, do this first
-`scripts/run-tests.sh` only runs contract tests for tasks marked `[x]` or
-`← current` in PLAN.md — a landed task's tests are *always* included,
-regardless of which task is current. `tests/contract/test_task_9_1_configurable_prompt.py`'s
-`test_ac2_color_tokens_table_exact` asserts `COLOR_TOKENS` is an *exact*
-25-entry dict. **Before dispatching this task**, Tier 1 must re-amend
-that one test to expect 26 entries including `"blink": "\x1b[5m"`
-(the amendment was written once already during this phase's spec-writing
-pass, then deliberately reverted — see the "Track Task 19.1" era commits
-— specifically because landing it early broke Task 19.1's gate). Redo it
-now, as its own small commit, immediately before dispatching this task —
-not any earlier, or it will break the gate for whatever task is current
-at the time.
-
 ## Authoritative contract
 `docs/superpowers/specs/2026-07-18-memory-bootstrap-design.md` §4 ("Busy
 indicator plumbing") and §8's blink decision are the complete design
