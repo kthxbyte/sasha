@@ -275,13 +275,27 @@ def test_ac_moving_out_of_repo_clears_memory(tmp_path):
 
 
 # --- AC: commit hook ---------------------------------------------------------------
+#
+# Amended by Tier 1 for Task 19.3 (memory bootstrap): the four tests below
+# each need one *real* git commit to exist so encode_latest_commit's own
+# `git log -1` call (triggered by the commit hook) has something genuine
+# to read — FakeExecutor.run() never touches real git state. Previously
+# that commit was made before the first _check_place_shift() call; now
+# that a repo with real commit history at first place-shift eagerly
+# bootstraps (see docs/superpowers/specs/2026-07-18-memory-bootstrap-design.md),
+# doing so would exercise bootstrap instead of the commit-hook path this
+# suite exists to test. Moving each _commit(...) call to *after* the
+# first _check_place_shift() keeps the repo empty (zero commits, zero
+# docs) at bootstrap-decision time — bootstrap's own history/docs check
+# is a no-op on an empty repo, exactly matching this repo's pre-Task-19.3
+# behavior — so every assertion below is unchanged from before this task.
 
 def test_ac_run_once_git_commit_encodes_entry(tmp_path):
     repo = tmp_path / "repo"
     _init_repo(repo)
-    _commit(repo, "the actual commit")
     repl, executor, sink = _repl(str(repo))
     repl._check_place_shift()
+    _commit(repo, "the actual commit")
     repl.run_once('git commit -m "the actual commit"')
     lines = (repo / ".sasha" / "memory" / "semantic.jsonl").read_text().splitlines()
     entry = json.loads(lines[0])
@@ -292,9 +306,9 @@ def test_ac_run_once_git_commit_encodes_entry(tmp_path):
 def test_ac_commit_hook_ignores_non_commit_git_commands(tmp_path):
     repo = tmp_path / "repo"
     _init_repo(repo)
-    _commit(repo, "prior commit")
     repl, executor, sink = _repl(str(repo))
     repl._check_place_shift()
+    _commit(repo, "prior commit")
     repl.run_once("git status")
     assert not (repo / ".sasha" / "memory" / "semantic.jsonl").exists()
 
@@ -311,9 +325,9 @@ def test_ac_commit_hook_ignores_commit_subcommand_lookalike(tmp_path):
 def test_ac_commit_hook_skipped_on_failed_command(tmp_path):
     repo = tmp_path / "repo"
     _init_repo(repo)
-    _commit(repo, "existing")
     repl, executor, sink = _repl(str(repo))
     repl._check_place_shift()
+    _commit(repo, "existing")
     executor.next_exit = 1
     repl.run_once('git commit -m "should not be recorded"')
     assert not (repo / ".sasha" / "memory" / "semantic.jsonl").exists()
@@ -322,9 +336,9 @@ def test_ac_commit_hook_skipped_on_failed_command(tmp_path):
 def test_ac_creation_notice_fires_once_on_first_commit(tmp_path):
     repo = tmp_path / "repo"
     _init_repo(repo)
-    _commit(repo, "the first ever commit")
     repl, executor, sink = _repl(str(repo))
     repl._check_place_shift()
+    _commit(repo, "the first ever commit")
     repl.run_once('git commit -m "the first ever commit"')
     creation_notices = [l for l in sink.lines if "created .sasha/memory/" in l]
     assert len(creation_notices) == 1
