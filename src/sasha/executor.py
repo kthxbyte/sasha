@@ -110,6 +110,7 @@ class Executor:
         # --- job-control setup (interactive only) --------------------------
         sasha_pgid = None
         old_sigttou = None
+        old_sigttin = None
         chld_read = None
         chld_write = None
         old_sigchld = None
@@ -125,6 +126,7 @@ class Executor:
         if interactive:
             sasha_pgid = os.getpgrp()
             old_sigttou = signal.signal(signal.SIGTTOU, signal.SIG_IGN)
+            old_sigttin = signal.signal(signal.SIGTTIN, signal.SIG_IGN)
             chld_read, chld_write = os.pipe()
             os.set_blocking(chld_write, False)
             old_sigchld = signal.signal(signal.SIGCHLD, _on_sigchld)
@@ -177,6 +179,7 @@ class Executor:
                 # No real controlling terminal despite isatty(0) — degrade to
                 # the non-interactive path for the rest of this call.
                 signal.signal(signal.SIGTTOU, old_sigttou)
+                signal.signal(signal.SIGTTIN, old_sigttin)
                 signal.signal(signal.SIGCHLD, old_sigchld)
                 os.close(chld_read)
                 os.close(chld_write)
@@ -247,6 +250,13 @@ class Executor:
                         if wpid == 0:
                             continue
                         if os.WIFSTOPPED(wstatus):
+                            stopsig = os.WSTOPSIG(wstatus)
+                            if stopsig in (signal.SIGTTIN, signal.SIGTTOU):
+                                try:
+                                    os.killpg(pid, signal.SIGCONT)
+                                except OSError:
+                                    pass
+                                continue
                             stopped = True
                         else:
                             already_reaped = True
@@ -319,6 +329,7 @@ class Executor:
             except OSError:
                 pass
             signal.signal(signal.SIGTTOU, old_sigttou)
+            signal.signal(signal.SIGTTIN, old_sigttin)
             signal.signal(signal.SIGCHLD, old_sigchld)
             os.close(chld_read)
             os.close(chld_write)
