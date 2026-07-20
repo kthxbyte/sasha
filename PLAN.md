@@ -100,3 +100,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 - [x] Task 19.1 — memory.py: bounded_history, root_docs, encode_bootstrap, write lock
 - [x] Task 19.2 — prompt.py busy-star token (\S, blink) + Repl background-task counter
 - [x] Task 19.3 — repl.py: stage 1/2 bootstrap wiring into _check_place_shift
+
+## Phase 20 — Pager keystroke fix (ISSUE-040)
+
+- [ ] Task 20.1 — executor.py: ignore SIGTTIN symmetrically with SIGTTOU + stop-cause classification ← current
