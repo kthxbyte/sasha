@@ -103,4 +103,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 20 — Pager keystroke fix (ISSUE-040)
 
-- [ ] Task 20.1 — executor.py: ignore SIGTTIN symmetrically with SIGTTOU + stop-cause classification ← current
+- [x] Task 20.1 — executor.py: ignore SIGTTIN symmetrically with SIGTTOU + stop-cause classification
