@@ -10,6 +10,7 @@ import uuid
 from typing import Protocol
 
 import sasha.config as config
+from sasha.activity_indicator import ActivityIndicator
 from sasha.agent import run_consult
 from sasha.llm import ChatError
 from sasha import memory
@@ -62,6 +63,12 @@ class Repl:
         self._sink = sink
         self._getpass_fn = getpass_fn
         self._current_profile = config.profiles[config.default_profile]
+        self._activity = ActivityIndicator(
+            colors={"thinking": config.activity_indicator_thinking_color,
+                    "tool": config.activity_indicator_tool_color},
+            interval_s=config.activity_indicator_interval_s,
+            enabled=config.activity_indicator_enabled and sink.color_enabled,
+        )
         self._pending_offer = None  # (line, exit_code) or None
         self._current_repo_root = None   # pathlib.Path | None
         self._last_checked_cwd = None    # str | None
@@ -69,6 +76,12 @@ class Repl:
         self._background_tasks = 0
         self._bootstrap_attempted = set()      # set[pathlib.Path]
         self._last_bootstrap_thread = None     # threading.Thread | None, test seam
+
+    def _on_activity_phase(self, phase):
+        if phase is None:
+            self._activity.stop()
+        else:
+            self._activity.start(phase)
 
     def _consult(self, auto_prompt=None):
         if auto_prompt:
@@ -78,12 +91,14 @@ class Repl:
             client = self._client_factory(self._current_profile)
             run_consult(self._session, client, self._executor,
                         self._confirmer, self._sink.write_chunk,
-                        max_tool_turns=self._config.limits.max_tool_turns)
+                        max_tool_turns=self._config.limits.max_tool_turns,
+                        on_phase=self._on_activity_phase)
         except ChatError as e:
             self._sink.write_line(
                 f"[sasha] {self._current_profile.name} unreachable: "
                 f"{e.reason} — 'sasha profile <name>' to switch")
         finally:
+            self._activity.stop()
             self._sink.ensure_newline()
             self._check_memory_created()
 
@@ -454,7 +469,9 @@ class Repl:
             self._consult(prompt)
             return True
 
+        self._activity.start("tool")
         result = self._executor.run(stripped)
+        self._activity.stop()
 
         result_text = f"exit code: {result.exit_code}\nstderr:\n{result.stderr_text}"
         result_omitted_reason = None

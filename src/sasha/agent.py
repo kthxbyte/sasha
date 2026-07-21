@@ -19,14 +19,30 @@ def run_consult(
     confirmer: Confirmer,
     out: Callable[[str], None],
     max_tool_turns: int = 10,
+    on_phase: Callable[[str | None], None] = lambda phase: None,
 ) -> None:
     previous_key: tuple | None = None
     tool_turns = 0
 
+    def _consult_llm(messages, tools):
+        on_phase("thinking")
+        stopped = False
+
+        def _on_text(chunk):
+            nonlocal stopped
+            if not stopped:
+                on_phase(None)
+                stopped = True
+            out(chunk)
+
+        response = client.chat(messages, tools=tools, on_text=_on_text)
+        on_phase(None)
+        return response
+
     while True:
         messages = session.build_messages(executor.cwd)
         schema = [t.schema for t in REGISTRY.values()]
-        response = client.chat(messages, tools=schema, on_text=out)
+        response = _consult_llm(messages, schema)
         session.add_assistant(response)
 
         if not response.tool_calls:
@@ -67,13 +83,17 @@ def run_consult(
                     result_str = "User declined this action."
 
                 if executed:
+                    on_phase("tool")
                     result = tool.handler(final_arguments, executor)
+                    on_phase(None)
                     result_str = result.text
             else:
                 verdict = "auto-approved"
                 if tool.announce_when_auto_approved:
                     out(f"[sasha] ran (auto-approved): {final_arguments.get('command', '')}")
+                on_phase("tool")
                 result = tool.handler(final_arguments, executor)
+                on_phase(None)
                 result_str = result.text
                 executed = True
 
@@ -114,7 +134,7 @@ def run_consult(
                     "tool-turn limit reached")
                 session.add_user("Answer in text now; no further commands will be run.")
                 final_messages = session.build_messages(executor.cwd)
-                final_response = client.chat(final_messages, tools=[], on_text=out)
+                final_response = _consult_llm(final_messages, [])
                 session.add_assistant(final_response)
                 return
             if current_key is not None:

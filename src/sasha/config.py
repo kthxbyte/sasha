@@ -43,6 +43,10 @@ class Config:
     prompt: str = prompt.DEFAULT_TEMPLATE
     sensitive_paths: tuple[str, ...] = _DEFAULT_SENSITIVE_PATHS
     tool_log_max_size_mb: int = 100
+    activity_indicator_enabled: bool = True
+    activity_indicator_interval_s: float = 0.05
+    activity_indicator_thinking_color: str = "#C084FC"
+    activity_indicator_tool_color: str = "#FFD700"
     path: pathlib.Path | None = None
     notice: str | None = None
 
@@ -136,6 +140,12 @@ sensitive_paths = [
 
 [tool_log]
 max_size_mb = 100
+
+[activity_indicator]
+enabled = true
+interval_s = 0.05
+thinking_color = "#C084FC"
+tool_color = "#FFD700"
 """
 
 
@@ -218,6 +228,27 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         if isinstance(raw_max, int) and not isinstance(raw_max, bool) and raw_max > 0:
             tool_log_max_size_mb = raw_max
 
+    activity_indicator_enabled = True
+    activity_indicator_interval_s = 0.05
+    activity_indicator_thinking_color = "#C084FC"
+    activity_indicator_tool_color = "#FFD700"
+    activity_table = raw.get("activity_indicator", {})
+    if isinstance(activity_table, dict):
+        raw_enabled = activity_table.get("enabled")
+        if isinstance(raw_enabled, bool):
+            activity_indicator_enabled = raw_enabled
+        raw_interval = activity_table.get("interval_s")
+        if (isinstance(raw_interval, (int, float))
+                and not isinstance(raw_interval, bool)
+                and raw_interval > 0):
+            activity_indicator_interval_s = float(raw_interval)
+        raw_thinking = activity_table.get("thinking_color")
+        if isinstance(raw_thinking, str) and raw_thinking:
+            activity_indicator_thinking_color = raw_thinking
+        raw_tool = activity_table.get("tool_color")
+        if isinstance(raw_tool, str) and raw_tool:
+            activity_indicator_tool_color = raw_tool
+
     if default_profile_name not in profile_fields_by_name:
         raise ConfigError(
             f"default_profile '{default_profile_name}' not found in profiles"
@@ -240,6 +271,10 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         prompt=prompt_template,
         sensitive_paths=sensitive_paths,
         tool_log_max_size_mb=tool_log_max_size_mb,
+        activity_indicator_enabled=activity_indicator_enabled,
+        activity_indicator_interval_s=activity_indicator_interval_s,
+        activity_indicator_thinking_color=activity_indicator_thinking_color,
+        activity_indicator_tool_color=activity_indicator_tool_color,
         path=path,
         notice=notice,
     )
