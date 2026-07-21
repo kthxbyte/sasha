@@ -107,4 +107,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 21 — Safe command auto-approval (ISSUE-041)
 
-- [ ] Task 21.1 — safe_commands.py classifier + tools/agent/config/executor wiring for run_command auto-approval ← current
+- [x] Task 21.1 — safe_commands.py classifier + tools/agent/config/executor wiring for run_command auto-approval
