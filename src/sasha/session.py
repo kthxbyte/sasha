@@ -13,6 +13,7 @@ from sasha.llm import ChatResponse, ToolCall
 class NoteCommand:
     line: str
     exit_code: int
+    stderr_text: str = ""
 
 class Session:
     def __init__(self, history_token_budget: int = 12000,
@@ -23,7 +24,6 @@ class Session:
         self._project_memory_block: str = ""
         self.history: list[dict[str, Any]] = []  # Store message dicts
         self.notes: list[NoteCommand] = []  # Store note_command entries
-        self.last_stderr: str = ""
 
     def _build_system_prompt(self) -> str:
         functional = (
@@ -58,10 +58,9 @@ class Session:
         self._general_memory_block = text
 
     def note_command(self, line: str, result: ExecResult) -> None:
-        self.notes.append(NoteCommand(line, result.exit_code))
-        if len(self.notes) > 10:
+        self.notes.append(NoteCommand(line, result.exit_code, result.stderr_text))
+        if len(self.notes) > 5:
             self.notes.pop(0)
-        self.last_stderr = result.stderr_text
 
     def add_user(self, text: str) -> None:
         self.history.append({"role": "user", "content": text})
@@ -97,10 +96,10 @@ class Session:
         # Build context block
         context_lines = [cwd]
         for note in self.notes:
-            context_lines.append(f"{note.line} ({note.exit_code})")
-
-        if self.last_stderr:
-            context_lines.append(self.last_stderr)
+            line_part = f"{note.line} ({note.exit_code})"
+            if note.stderr_text:
+                line_part += f"\n{note.stderr_text}"
+            context_lines.append(line_part)
 
         context_block = "\n".join(context_lines)
 
@@ -132,7 +131,6 @@ class Session:
 
         messages = [self.system_prompt_dict()] + history_to_trim + [final_user_msg]
         self.notes = []
-        self.last_stderr = ""
         return messages
 
     def system_prompt_dict(self) -> dict[str, Any]:

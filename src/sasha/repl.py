@@ -6,12 +6,14 @@ import shlex
 import socket
 import sys
 import threading
+import uuid
 from typing import Protocol
 
 import sasha.config as config
 from sasha.agent import run_consult
 from sasha.llm import ChatError
 from sasha import memory
+from sasha import safe_commands
 from sasha import tool_log
 from sasha.triggers import Decision, command_word, decide
 import sasha.prompt as prompt_mod
@@ -453,6 +455,26 @@ class Repl:
             return True
 
         result = self._executor.run(stripped)
+
+        result_text = f"exit code: {result.exit_code}\nstderr:\n{result.stderr_text}"
+        result_omitted_reason = None
+        if safe_commands.touches_sensitive_path(stripped, self._executor):
+            result_text = None
+            result_omitted_reason = "sensitive_path"
+
+        tool_log.log_call(
+            tool_name="run_command",
+            call_id=str(uuid.uuid4()),
+            arguments={"command": stripped},
+            executed_command=None,
+            cwd=self._executor.cwd,
+            verdict="direct",
+            executed=True,
+            result_text=result_text,
+            result_omitted_reason=result_omitted_reason,
+        )
+        tool_log.check_and_maybe_compact_async(self._sink.write_line)
+
         self._session.note_command(stripped, result)
 
         if result.ctrl_z_terminated:
