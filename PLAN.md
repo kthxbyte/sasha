@@ -124,4 +124,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 25 — Raw-typed command activity awareness (ISSUE-044)
 
-- [ ] Task 25.1 — repl.py tool_log hook + Session recency-window enrichment ← current
+- [x] Task 25.1 — repl.py tool_log hook + Session recency-window enrichment
