@@ -44,7 +44,13 @@ def test_ac_registry_has_exactly_five_tools():
 
 def test_ac_permission_fixed_by_tool_type():
     from sasha.tools import REGISTRY
-    assert REGISTRY["run_command"].requires_confirmation is True
+    # Amended by Tier 1 for Task 21.1 (safe command auto-approval,
+    # ISSUE-041): run_command's requires_confirmation becomes a per-call
+    # classifier instead of a fixed bool -- the one deliberate exception to
+    # this "fixed by tool type" invariant. Every other tool keeps a fixed
+    # bool, unchanged. See
+    # docs/superpowers/specs/task-21.1-safe-command-auto-approval.md.
+    assert callable(REGISTRY["run_command"].requires_confirmation)
     assert REGISTRY["write_file"].requires_confirmation is True
     assert REGISTRY["read_file"].requires_confirmation is False
     assert REGISTRY["list_dir"].requires_confirmation is False

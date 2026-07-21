@@ -36,6 +36,12 @@ class SpyExecutor:
     def cwd(self):
         return "/spy"
 
+    # Amended by Tier 1 for Task 21.1 (safe command auto-approval,
+    # ISSUE-041): the classifier reads executor.sensitive_path_patterns
+    # for every run_command call, so any duck-typed executor used with
+    # run_command now needs this attribute.
+    sensitive_path_patterns = ()
+
     def run(self, command, capture_stdout=False):
         self.calls.append((command, capture_stdout))
         return self._result
@@ -96,11 +102,17 @@ def test_ac1_text_only_runs_nothing():
 # --- AC2: yes ------------------------------------------------------------------
 
 def test_ac2_yes_executes_and_reports():
-    with StubServer([_tc("ls -la /var"), {"kind": "text", "text": "done"}]) as stub:
+    # Amended by Tier 1 for Task 21.1 (safe command auto-approval,
+    # ISSUE-041): "ls -la /var" is now classified as safe and would skip
+    # the confirmer entirely, so this AC2 test (which exercises the "yes"
+    # verdict path through the confirmer) needs a command outside the
+    # auto-approval allowlist to still reach that path. "mv" is not
+    # allowlisted.
+    with StubServer([_tc("mv a b"), {"kind": "text", "text": "done"}]) as stub:
         _, executor, confirmer, _ = _consult(stub.base_url, [("yes", "")])
         tool_contents = _tool_message_contents(stub, 1)
-    assert executor.calls == [("ls -la /var", True)]
-    assert confirmer.asked[0][0] == "ls -la /var"
+    assert executor.calls == [("mv a b", True)]
+    assert confirmer.asked[0][0] == "mv a b"
     assert len(tool_contents) == 1
     assert "3" in tool_contents[0]           # exit code
     assert "OUT-TAIL" in tool_contents[0]

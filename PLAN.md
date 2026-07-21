@@ -104,3 +104,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 20 — Pager keystroke fix (ISSUE-040)
 
 - [x] Task 20.1 — executor.py: ignore SIGTTIN symmetrically with SIGTTOU + stop-cause classification
+
+## Phase 21 — Safe command auto-approval (ISSUE-041)
+
+- [ ] Task 21.1 — safe_commands.py classifier + tools/agent/config/executor wiring for run_command auto-approval ← current

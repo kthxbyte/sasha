@@ -24,6 +24,12 @@ class SpyExecutor:
     def cwd(self):
         return "/spy"
 
+    # Amended by Tier 1 for Task 21.1 (safe command auto-approval,
+    # ISSUE-041): the classifier reads executor.sensitive_path_patterns
+    # for every run_command call, so any duck-typed executor used with
+    # run_command now needs this attribute.
+    sensitive_path_patterns = ()
+
     def check_syntax(self, line):
         return None
 
@@ -112,7 +118,12 @@ def test_ac2_text_precedes_confirmation():
     events = []
     with StubServer([
         {"kind": "tool_call", "id": "call_1", "name": "run_command",
-         "arguments": {"command": "ls", "description": "list"},
+         # Amended by Tier 1 for Task 21.1 (safe command auto-approval,
+         # ISSUE-041): "ls" is now classified as safe and would skip the
+         # confirmer entirely, so this test (which asserts on preamble
+         # text arriving before the confirmation prompt) needs a command
+         # outside the auto-approval allowlist. "touch" is not allowlisted.
+         "arguments": {"command": "touch /tmp/marker", "description": "create a marker"},
          "text": "let me look around first", "chunk_size": 6},
         {"kind": "text", "text": "fine, not running it"},
     ]) as stub:

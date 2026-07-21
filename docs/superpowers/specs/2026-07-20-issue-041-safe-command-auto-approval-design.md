@@ -106,7 +106,15 @@ when every check below passes, in order:
 
 1. Reject if the raw command string contains `` ` ``, `$(`, `>`, or `>>`.
 2. Tokenize with `shlex.split`; reject on a `ValueError` (unbalanced
-   quoting).
+   quoting). **Verified during Task 21.1 implementation-check:**
+   `shlex.split` only treats `&&`/`;`/`|`/`||`/`&` as their own tokens when
+   whitespace-separated on both sides (`"ls;pwd"` tokenizes as one glued
+   token, not two) — so the raw string is first passed through a regex
+   that pads each operator with spaces before tokenizing. A quoted operator
+   (e.g. `echo "a;b"`) can therefore be mis-split into extra segments; this
+   always fails *closed* (an extra, non-allowlisted-looking segment forces
+   confirmation), never open, so it's an accepted limitation of the
+   low-effort classifier rather than a correctness bug.
 3. Split the token stream into segments at `&&`, `;`, `|`, `||`; reject if a
    bare `&` (backgrounding) appears anywhere.
 4. Every segment's leading token must exactly match one of the hardcoded
