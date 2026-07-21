@@ -112,4 +112,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 22 — Tool-call logging (ISSUE-042)
 
 - [x] Task 22.1 — tool_log.py core write path + safe_commands.touches_sensitive_path extraction + agent.py hook
-- [ ] Task 22.2 — compaction (background thread), [tool_log] config, sasha compact-log command ← current
+- [x] Task 22.2 — compaction (background thread), [tool_log] config, sasha compact-log command
