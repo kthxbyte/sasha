@@ -60,6 +60,9 @@ def touches_sensitive_path(command: str, executor) -> bool:
             expanded_pattern = os.path.expanduser(pattern)
             if fnmatch.fnmatch(normalized, expanded_pattern):
                 return True
+            if (expanded_pattern.endswith("/**")
+                    and normalized == expanded_pattern[:-3]):
+                return True
     return False
 
 
