@@ -116,4 +116,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 23 — Bare-directory denylist matching fix (ISSUE-043)
 
-- [ ] Task 23.1 — safe_commands.py: match dir/** patterns against the bare directory too ← current
+- [x] Task 23.1 — safe_commands.py: match dir/** patterns against the bare directory too
