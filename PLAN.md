@@ -121,3 +121,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 24 — Foreground-group keystroke relay helper (ISSUE-040)
 
 - [x] Task 24.1 — _kb_relay_helper.py + executor.py fd-passing/wrapped-script wiring
+
+## Phase 25 — Raw-typed command activity awareness (ISSUE-044)
+
+- [ ] Task 25.1 — repl.py tool_log hook + Session recency-window enrichment ← current

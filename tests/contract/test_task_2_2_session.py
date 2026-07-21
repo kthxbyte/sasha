@@ -55,10 +55,14 @@ def test_ac1_system_prompt_first_and_grounded():
 # --- AC2: fresh context block -------------------------------------------------
 
 def test_ac2_context_block_in_final_user_message():
+    # Amended by Tier 1 for Task 25.1 (ISSUE-044): the notes cap dropped
+    # from 10 to 5 now that each note also carries its own stderr_text
+    # (previously a single separate last_stderr field, now removed). See
+    # docs/superpowers/specs/task-25.1-raw-command-activity.md.
     from sasha.session import Session
 
     s = Session()
-    for i in range(1, 13):  # 12 commands; only the last 10 may surface
+    for i in range(1, 13):  # 12 commands; only the last 5 may surface
         stderr = "distinctive-boom-91" if i == 12 else ""
         code = 91 if i == 12 else 0
         s.note_command(f"probe-command-{i:02d}", _result(code, stderr))
@@ -70,10 +74,10 @@ def test_ac2_context_block_in_final_user_message():
     content = final["content"]
     assert "why did that fail?" in content
     assert "/probe/dir" in content
-    for i in range(3, 13):
+    for i in range(8, 13):
         assert f"probe-command-{i:02d}" in content
-    assert "probe-command-01" not in content
-    assert "probe-command-02" not in content
+    for i in range(1, 8):
+        assert f"probe-command-{i:02d}" not in content
     assert "91" in content                      # exit code of the trigger
     assert "distinctive-boom-91" in content     # its captured stderr
 

@@ -30,6 +30,11 @@ class SpyExecutor:
     def cwd(self):
         return "/spy"
 
+    # Amended by Tier 1 for Task 25.1 (ISSUE-044): the raw-command path
+    # now calls safe_commands.touches_sensitive_path for every command,
+    # which reads this attribute.
+    sensitive_path_patterns = ()
+
     def check_syntax(self, line):
         return self.syntax_error
 

@@ -43,6 +43,11 @@ class FakeExecutor:
     def cwd(self):
         return self._cwd
 
+    # Amended by Tier 1 for Task 25.1 (ISSUE-044): the raw-command path
+    # now calls safe_commands.touches_sensitive_path for every command,
+    # which reads this attribute.
+    sensitive_path_patterns = ()
+
     @property
     def last_command(self):
         return self._last_command
