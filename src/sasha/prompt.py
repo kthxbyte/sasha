@@ -15,9 +15,9 @@ for _name, _code in _BASE_CODES.items():
     COLOR_TOKENS[f"bold-{_name}"] = f"\x1b[1;{_code}m"
     COLOR_TOKENS[f"dim-{_name}"] = f"\x1b[2;{_code}m"
 
-DEFAULT_TEMPLATE: str = r"\[magenta\][sasha]\[reset\]\S \[bold-green\]\u@\h\[reset\]:\[bold-blue\]\w\[reset\] $ "
+DEFAULT_TEMPLATE: str = r"\[magenta\][sasha]\[reset\] \[bold-green\]\u@\h\[reset\]:\[bold-blue\]\w\[reset\] $ "
 
-_POSITIONAL = {"u", "h", "w", "W", "S"}
+_POSITIONAL = {"u", "h", "w", "W"}
 
 
 class PromptError(Exception):
@@ -63,19 +63,6 @@ def _walk(template: str):
         raise PromptError(f"unrecognized escape '\\{nxt}'")
 
 
-def _busy_star(busy: bool, color_enabled: bool) -> str:
-    """The status star: plain "✦" when colors are disabled (matches how
-    the literal star in today's DEFAULT_TEMPLATE already behaves), or
-    "✦" wrapped in yellow (idle) / blink+yellow (busy) escape codes,
-    zero-width-marked the same way every other color token already is."""
-    if not color_enabled:
-        return "✦"
-    code = (COLOR_TOKENS["blink"] + COLOR_TOKENS["yellow"]) if busy \
-        else COLOR_TOKENS["yellow"]
-    return (_RL_IGNORE_START + code + _RL_IGNORE_END + "✦"
-            + _RL_IGNORE_START + COLOR_TOKENS["reset"] + _RL_IGNORE_END)
-
-
 def validate_template(template: str) -> None:
     """Raise PromptError if `template` contains any unrecognized escape
     or unknown \\[token\\] name. Called by config.load()."""
@@ -84,7 +71,7 @@ def validate_template(template: str) -> None:
 
 
 def render(template: str, *, user: str, host: str, cwd: str, home: str,
-           color_enabled: bool, busy: bool = False) -> str:
+           color_enabled: bool) -> str:
     """Pure substitution — no I/O. `cwd`/`home` are pre-computed by the
     caller; \\w abbreviates home to '~', \\W is cwd's basename."""
     parts = []
@@ -101,8 +88,6 @@ def render(template: str, *, user: str, host: str, cwd: str, home: str,
                     parts.append("~" + cwd[len(home):])
                 else:
                     parts.append(cwd)
-            elif value == "S":
-                parts.append(_busy_star(busy, color_enabled))
             else:
                 if cwd == home:
                     parts.append("~")

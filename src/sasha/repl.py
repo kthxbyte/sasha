@@ -73,7 +73,6 @@ class Repl:
         self._current_repo_root = None   # pathlib.Path | None
         self._last_checked_cwd = None    # str | None
         self._memory_dir_existed = False
-        self._background_tasks = 0
         self._bootstrap_attempted = set()      # set[pathlib.Path]
         self._last_bootstrap_thread = None     # threading.Thread | None, test seam
 
@@ -285,7 +284,6 @@ class Repl:
     def _spawn_bootstrap_summary(self, repo_root, history, docs):
         self._bootstrap_attempted.add(repo_root)
         (repo_root / ".sasha" / "memory" / ".bootstrap_pending").write_text("")
-        self._begin_background_task()
         thread = threading.Thread(
             target=self._bootstrap_stage_2,
             args=(repo_root, history, docs), daemon=True)
@@ -307,7 +305,6 @@ class Repl:
             self._sink.write_line(
                 self._bootstrap_finish_message(len(lines), docs))
             self._clear_bootstrap_pending(repo_root)
-        self._end_background_task()
 
     def _clear_bootstrap_pending(self, repo_root):
         pending = repo_root / ".sasha" / "memory" / ".bootstrap_pending"
@@ -379,12 +376,6 @@ class Repl:
             self._sink.write_line(
                 "[sasha] created .sasha/memory/ — remembering context for "
                 "this project from now on (gitignored automatically)")
-
-    def _begin_background_task(self):
-        self._background_tasks += 1
-
-    def _end_background_task(self):
-        self._background_tasks = max(0, self._background_tasks - 1)
 
     def _activate_profile(self, name):
         if name not in self._config.profiles:
@@ -530,8 +521,7 @@ class Repl:
             cwd = self._executor.cwd
             rendered = prompt_mod.render(
                 self._config.prompt, user=user, host=host, cwd=cwd,
-                home=home, color_enabled=self._sink.color_enabled,
-                busy=self._background_tasks > 0)
+                home=home, color_enabled=self._sink.color_enabled)
             try:
                 line = self._input_fn(rendered)
             except EOFError:
