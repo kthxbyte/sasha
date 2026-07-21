@@ -85,10 +85,12 @@ def test_ac4_prompt(env_home):
     home, env = env_home
     r = _run(env, stdin="exit\n", cwd=str(home))
     assert r.returncode == 0
-    # Amended by Tier 1 (2026-07-17): DEFAULT_TEMPLATE changed — "✦" now
-    # renders near the front of the prompt (after "[sasha]"), not right
-    # before the trailing space, so the home-cwd abbreviation now shows up
-    # right before the trailing "$ " instead of right before "✦ ".
+    # Amended by Tier 1 (2026-07-17): DEFAULT_TEMPLATE changed — the
+    # home-cwd abbreviation shows up right before the trailing "$ ".
+    # Amended again by Tier 1 for Task 26.2 (ISSUE-045): the busy-star
+    # (✦), which used to render near the front of the prompt, is removed
+    # entirely — this assertion was already about the trailing "$ ", so
+    # it's unaffected in substance, only the comment above was stale.
     assert "~ $ " in r.stdout
 
 

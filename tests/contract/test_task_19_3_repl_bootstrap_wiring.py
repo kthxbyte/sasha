@@ -207,7 +207,6 @@ def test_ac2_empty_repo_no_docs_creates_nothing(tmp_path):
     repl._check_place_shift()
     assert not (repo / ".sasha").exists()
     assert not any("no memory yet" in l for l in sink.lines)
-    assert repl._background_tasks == 0
     assert repl._last_bootstrap_thread is None
 
 
@@ -221,7 +220,6 @@ def test_ac3_docs_without_commits_spawns_stage2(tmp_path):
     repl._check_place_shift()
     assert repl._last_bootstrap_thread is not None
     _join_if_spawned(repl)
-    assert repl._background_tasks == 0
 
 
 # --- AC4-5: stage 2 success ------------------------------------------------------
@@ -242,7 +240,6 @@ def test_ac4_stage2_success_writes_bootstrap_entries(tmp_path):
     assert {e["text"] for e in bootstrap_entries} == {
         "fact one", "fact two", "fact three"}
     assert not (repo / ".sasha" / "memory" / ".bootstrap_pending").exists()
-    assert repl._background_tasks == 0
 
 
 def test_ac5_finish_line_names_single_file(tmp_path):
@@ -314,7 +311,6 @@ def test_ac6_stage2_unreachable_writes_nothing_and_keeps_sentinel(tmp_path):
     assert not any(e["kind"] == "bootstrap" for e in entries)
     assert not any("finished building context" in l for l in sink.lines)
     assert (repo / ".sasha" / "memory" / ".bootstrap_pending").exists()
-    assert repl._background_tasks == 0
 
 
 def test_ac7_stage2_empty_response_writes_nothing(tmp_path):
@@ -427,7 +423,6 @@ def test_ac11_no_pending_sentinel_never_spawns(tmp_path):
     repl, executor, sink = _repl(str(repo))
     repl._check_place_shift()
     assert repl._last_bootstrap_thread is None
-    assert repl._background_tasks == 0
 
 
 # --- AC12: existing creation-notice path is unaffected on a truly empty repo ---

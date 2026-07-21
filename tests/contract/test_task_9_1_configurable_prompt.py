@@ -233,6 +233,10 @@ def test_ac4_default_template_is_valid():
 # change (Salvador's own edit), not a bug. These tests now pin the new
 # default exactly instead of proving equivalence with an old hardcoded
 # renderer that no longer represents the intended output.
+# Amended again by Tier 1 for Task 26.2 (ISSUE-045): the busy-star (\S)
+# is removed from DEFAULT_TEMPLATE entirely — replaced by the cursor-
+# based ActivityIndicator (Task 26.1). See
+# docs/superpowers/specs/task-26.2-remove-busy-star.md.
 
 def test_ac5_default_template_renders_expected_output_colored():
     from sasha.prompt import COLOR_TOKENS, DEFAULT_TEMPLATE, render
@@ -245,8 +249,7 @@ def test_ac5_default_template_renders_expected_output_colored():
     def c(token):
         return f"{_RL_IGNORE_START}{COLOR_TOKENS[token]}{_RL_IGNORE_END}"
 
-    expected = (f"{c('magenta')}[sasha]{c('reset')}"
-                f"{c('yellow')}✦{c('reset')} "
+    expected = (f"{c('magenta')}[sasha]{c('reset')} "
                 f"{c('bold-green')}alice@devbox{c('reset')}"
                 f":{c('bold-blue')}~/project{c('reset')} $ ")
     assert out == expected
@@ -258,7 +261,7 @@ def test_ac5_default_template_renders_expected_output_plain():
     out = render(DEFAULT_TEMPLATE, user="alice", host="devbox",
                  cwd="/home/alice/project", home="/home/alice",
                  color_enabled=False)
-    assert out == "[sasha]✦ alice@devbox:~/project $ "
+    assert out == "[sasha] alice@devbox:~/project $ "
 
 
 # --- AC6: config.load() integration ---------------------------------------

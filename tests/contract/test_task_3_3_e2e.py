@@ -88,7 +88,14 @@ class SashaProc:
             + self.transcript.decode("utf-8", errors="replace"))
 
     def drain_prompt(self):
-        return self.read_until("✦")  # ✦
+        # Amended by Tier 1 for Task 26.2 (ISSUE-045): the busy-star (✦)
+        # is removed from DEFAULT_TEMPLATE; "$ " (the prompt's own
+        # trailing marker) is the replacement "a prompt was drawn"
+        # signal. Same reliability characteristics as before: transcript
+        # is cumulative, so this confirms a prompt has appeared at some
+        # point, not strictly the most recent one — matches the star's
+        # own pre-existing behavior, not a regression.
+        return self.read_until("$ ")
 
     def close(self):
         try:
