@@ -125,3 +125,8 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 25 — Raw-typed command activity awareness (ISSUE-044)
 
 - [x] Task 25.1 — repl.py tool_log hook + Session recency-window enrichment
+
+## Phase 26 — Cursor-based activity indicator (ISSUE-045)
+
+- [ ] Task 26.1 — activity_indicator.py + agent.py on_phase hook + repl.py/config.py wiring ← current
+- [ ] Task 26.2 — remove the Phase 19 busy-star mechanism
