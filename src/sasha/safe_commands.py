@@ -44,6 +44,25 @@ def _normalize(token: str, cwd: str) -> str:
     return os.path.normpath(expanded)
 
 
+def touches_sensitive_path(command: str, executor) -> bool:
+    try:
+        tokens = _tokenize(command)
+    except ValueError:
+        return False
+
+    for tok in tokens:
+        if tok in _OPERATORS or tok in _ALLOWLISTED_VERBS:
+            continue
+        if tok.startswith("-"):
+            continue
+        normalized = _normalize(tok, executor.cwd)
+        for pattern in executor.sensitive_path_patterns:
+            expanded_pattern = os.path.expanduser(pattern)
+            if fnmatch.fnmatch(normalized, expanded_pattern):
+                return True
+    return False
+
+
 def requires_confirmation(args: dict, executor) -> bool:
     command = args.get("command", "")
 
@@ -69,15 +88,4 @@ def requires_confirmation(args: dict, executor) -> bool:
         if "$" in tok:
             return True
 
-    for tok in tokens:
-        if tok in _OPERATORS or tok in _ALLOWLISTED_VERBS:
-            continue
-        if tok.startswith("-"):
-            continue
-        normalized = _normalize(tok, executor.cwd)
-        for pattern in executor.sensitive_path_patterns:
-            expanded_pattern = os.path.expanduser(pattern)
-            if fnmatch.fnmatch(normalized, expanded_pattern):
-                return True
-
-    return False
+    return touches_sensitive_path(command, executor)
