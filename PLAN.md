@@ -129,4 +129,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 26 — Cursor-based activity indicator (ISSUE-045)
 
 - [x] Task 26.1 — activity_indicator.py + agent.py on_phase hook + repl.py/config.py wiring
-- [ ] Task 26.2 — remove the Phase 19 busy-star mechanism ← current
+- [x] Task 26.2 — remove the Phase 19 busy-star mechanism
