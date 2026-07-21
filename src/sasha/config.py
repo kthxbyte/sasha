@@ -42,6 +42,7 @@ class Config:
     limits: Limits
     prompt: str = prompt.DEFAULT_TEMPLATE
     sensitive_paths: tuple[str, ...] = _DEFAULT_SENSITIVE_PATHS
+    tool_log_max_size_mb: int = 100
     path: pathlib.Path | None = None
     notice: str | None = None
 
@@ -132,6 +133,9 @@ sensitive_paths = [
   "~/.docker/config.json", "~/.netrc", "~/.pgpass",
   "~/.git-credentials", "~/.npmrc", "**/.env", "**/.env.*",
 ]
+
+[tool_log]
+max_size_mb = 100
 """
 
 
@@ -207,6 +211,13 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         if isinstance(raw_paths, list) and all(isinstance(p, str) for p in raw_paths):
             sensitive_paths = tuple(raw_paths)
 
+    tool_log_max_size_mb = 100
+    tool_log_table = raw.get("tool_log", {})
+    if isinstance(tool_log_table, dict):
+        raw_max = tool_log_table.get("max_size_mb")
+        if isinstance(raw_max, int) and not isinstance(raw_max, bool) and raw_max > 0:
+            tool_log_max_size_mb = raw_max
+
     if default_profile_name not in profile_fields_by_name:
         raise ConfigError(
             f"default_profile '{default_profile_name}' not found in profiles"
@@ -228,6 +239,7 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         limits=limits,
         prompt=prompt_template,
         sensitive_paths=sensitive_paths,
+        tool_log_max_size_mb=tool_log_max_size_mb,
         path=path,
         notice=notice,
     )

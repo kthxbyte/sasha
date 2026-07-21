@@ -12,6 +12,7 @@ import sasha.config as config
 from sasha.agent import run_consult
 from sasha.llm import ChatError
 from sasha import memory
+from sasha import tool_log
 from sasha.triggers import Decision, command_word, decide
 import sasha.prompt as prompt_mod
 
@@ -140,11 +141,14 @@ class Repl:
             self._handle_memory_builtin()
         elif verb == "forget":
             self._handle_forget_builtin()
+        elif verb == "compact-log":
+            self._handle_compact_log_builtin()
         elif verb == "help":
             self._sink.write_line("[sasha] sasha mute <cmd> [<N>], "
                       "sasha unmute <cmd>, "
                       "sasha profile [<name>] (asks for a key if needed), "
                       "sasha memory, sasha forget, "
+                      "sasha compact-log, "
                       "?? <question>")
         else:
             self._sink.write_line(f"[sasha] unknown command: {rest}")
@@ -196,6 +200,18 @@ class Repl:
         self._session.set_project_memory("")
         self._memory_dir_existed = False
         self._sink.write_line("[sasha] forgotten")
+
+    def _handle_compact_log_builtin(self):
+        result = tool_log.compact()
+        before_mb = result.before_bytes / 1_000_000
+        after_mb = result.after_bytes / 1_000_000
+        self._sink.write_line(
+            f"[sasha] tool_log.jsonl compacted: {before_mb:.1f} MB "
+            f"→ {after_mb:.1f} MB")
+        if result.still_too_big:
+            self._sink.write_line(
+                f"[sasha] still {after_mb:.1f} MB even with all results "
+                f"stripped — consider deleting or archiving it")
 
     def _check_place_shift(self):
         cwd = self._executor.cwd

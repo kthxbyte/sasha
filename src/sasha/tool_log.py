@@ -1,14 +1,101 @@
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import json
 import os
 import pathlib
 import sys
+import threading
 import uuid
 
 _session_id = str(uuid.uuid4())
 _warned = False
+_max_size_mb = 100
+_compaction_lock = threading.Lock()
+
+
+def configure(max_size_mb: int) -> None:
+    global _max_size_mb
+    _max_size_mb = max_size_mb
+
+
+@dataclasses.dataclass(frozen=True)
+class CompactionResult:
+    before_bytes: int
+    after_bytes: int
+    still_too_big: bool
+
+
+def compact(max_size_mb: float | None = None) -> CompactionResult:
+    if max_size_mb is None:
+        max_size_mb = _max_size_mb
+    max_bytes = int(max_size_mb * 1_000_000)
+    target_bytes = max_bytes / 2
+    path = _log_path()
+
+    if not path.exists():
+        return CompactionResult(0, 0, False)
+
+    with _compaction_lock:
+        before_bytes = path.stat().st_size
+
+        entries = []
+        for line in path.read_text().splitlines():
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+        sizes = [len(json.dumps(e)) + 1 for e in entries]
+        running_total = sum(sizes)
+        for idx, entry in enumerate(entries):
+            if running_total <= target_bytes:
+                break
+            if entry.get("result") is not None:
+                entry["result"] = None
+                entry["result_omitted_reason"] = "compacted"
+                new_size = len(json.dumps(entry)) + 1
+                running_total += new_size - sizes[idx]
+                sizes[idx] = new_size
+
+        new_text = "".join(json.dumps(e) + "\n" for e in entries)
+        tmp_path = path.with_name(path.name + ".tmp")
+        try:
+            fd = os.open(str(tmp_path), os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                f.write(new_text)
+            os.replace(str(tmp_path), str(path))
+        except OSError:
+            return CompactionResult(before_bytes, before_bytes, before_bytes > max_bytes)
+
+        after_bytes = path.stat().st_size
+        return CompactionResult(before_bytes, after_bytes, after_bytes > max_bytes)
+
+
+def check_and_maybe_compact_async(out):
+    path = _log_path()
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None
+    if size <= _max_size_mb * 1_000_000:
+        return None
+
+    def _run():
+        result = compact()
+        if result.still_too_big:
+            archive_name = "tool_log-archive-" + _utc_timestamp()[:10] + ".jsonl"
+            out(f"[sasha] tool_log.jsonl is {result.after_bytes // 1_000_000} MB "
+                f"even with all results stripped — delete it or archive it "
+                f"(e.g. mv {path} {path.parent / archive_name}) "
+                f"to reclaim space.")
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return thread
 
 
 def _log_path() -> pathlib.Path:

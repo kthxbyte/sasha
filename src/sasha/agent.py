@@ -101,6 +101,7 @@ def run_consult(
                 result_text=result_text,
                 result_omitted_reason=result_omitted_reason,
             )
+            tool_log.check_and_maybe_compact_async(out)
 
             if executed:
                 current_key = (call.name, tool.repetition_key(final_arguments))

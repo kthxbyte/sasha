@@ -7,6 +7,7 @@ import sys
 
 from sasha import completion
 from sasha import personality
+from sasha import tool_log
 from sasha.config import ConfigError, load
 from sasha.executor import Executor
 from sasha.llm import ChatClient
@@ -41,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as e:
         print(f"sasha: config error: {e}", file=sys.stderr)
         return 2
+
+    tool_log.configure(config.tool_log_max_size_mb)
 
     profile_name = args.profile or config.default_profile
     if profile_name not in config.profiles:
