@@ -120,4 +120,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 24 — Foreground-group keystroke relay helper (ISSUE-040)
 
-- [ ] Task 24.1 — _kb_relay_helper.py + executor.py fd-passing/wrapped-script wiring ← current
+- [x] Task 24.1 — _kb_relay_helper.py + executor.py fd-passing/wrapped-script wiring
