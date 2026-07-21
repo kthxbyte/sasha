@@ -117,3 +117,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 23 — Bare-directory denylist matching fix (ISSUE-043)
 
 - [x] Task 23.1 — safe_commands.py: match dir/** patterns against the bare directory too
+
+## Phase 24 — Foreground-group keystroke relay helper (ISSUE-040)
+
+- [ ] Task 24.1 — _kb_relay_helper.py + executor.py fd-passing/wrapped-script wiring ← current
