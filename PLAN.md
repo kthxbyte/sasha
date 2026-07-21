@@ -113,3 +113,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 22.1 — tool_log.py core write path + safe_commands.touches_sensitive_path extraction + agent.py hook
 - [x] Task 22.2 — compaction (background thread), [tool_log] config, sasha compact-log command
+
+## Phase 23 — Bare-directory denylist matching fix (ISSUE-043)
+
+- [ ] Task 23.1 — safe_commands.py: match dir/** patterns against the bare directory too ← current
