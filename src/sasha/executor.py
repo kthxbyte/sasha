@@ -41,16 +41,22 @@ def _sanitize(raw: bytes) -> str:
 
 class Executor:
     def __init__(self, cwd: str, env: dict[str, str], *,
-                 stderr_capture_bytes: int = 8192) -> None:
+                 stderr_capture_bytes: int = 8192,
+                 sensitive_path_patterns: tuple[str, ...] = ()) -> None:
         self._cwd = os.path.realpath(cwd)
         self._env = dict(env)
         self._stderr_capture_bytes = stderr_capture_bytes
+        self._sensitive_path_patterns = sensitive_path_patterns
         self._last_command: str | None = None
         self._last_result: ExecResult | None = None
 
     @property
     def cwd(self) -> str:
         return self._cwd
+
+    @property
+    def sensitive_path_patterns(self) -> tuple[str, ...]:
+        return self._sensitive_path_patterns
 
     @property
     def last_command(self) -> str | None:

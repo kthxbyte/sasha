@@ -27,12 +27,21 @@ class Limits:
     mute_threshold: int = 3
 
 
+_DEFAULT_SENSITIVE_PATHS: tuple[str, ...] = (
+    "~/.ssh/**", "/etc/passwd", "/etc/shadow*", "/etc/sudoers*",
+    "~/.aws/**", "~/.gnupg/**", "~/.kube/**", "~/.config/gcloud/**",
+    "~/.docker/config.json", "~/.netrc", "~/.pgpass",
+    "~/.git-credentials", "~/.npmrc", "**/.env", "**/.env.*",
+)
+
+
 @dataclasses.dataclass(frozen=True)
 class Config:
     default_profile: str
     profiles: dict[str, Profile]
     limits: Limits
     prompt: str = prompt.DEFAULT_TEMPLATE
+    sensitive_paths: tuple[str, ...] = _DEFAULT_SENSITIVE_PATHS
     path: pathlib.Path | None = None
     notice: str | None = None
 
@@ -115,6 +124,14 @@ base_url = "http://192.168.8.253:11441/v1"
 model = "local"
 api_key = ""
 api_key_required = false
+
+[safe_commands]
+sensitive_paths = [
+  "~/.ssh/**", "/etc/passwd", "/etc/shadow*", "/etc/sudoers*",
+  "~/.aws/**", "~/.gnupg/**", "~/.kube/**", "~/.config/gcloud/**",
+  "~/.docker/config.json", "~/.netrc", "~/.pgpass",
+  "~/.git-credentials", "~/.npmrc", "**/.env", "**/.env.*",
+]
 """
 
 
@@ -183,6 +200,13 @@ def _build_config(raw: dict, path: pathlib.Path | None,
 
     limits = _merge_limits(Limits(), raw.get("limits", {}))
 
+    sensitive_paths = _DEFAULT_SENSITIVE_PATHS
+    safe_commands_table = raw.get("safe_commands", {})
+    if isinstance(safe_commands_table, dict):
+        raw_paths = safe_commands_table.get("sensitive_paths")
+        if isinstance(raw_paths, list) and all(isinstance(p, str) for p in raw_paths):
+            sensitive_paths = tuple(raw_paths)
+
     if default_profile_name not in profile_fields_by_name:
         raise ConfigError(
             f"default_profile '{default_profile_name}' not found in profiles"
@@ -203,6 +227,7 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         profiles=profiles,
         limits=limits,
         prompt=prompt_template,
+        sensitive_paths=sensitive_paths,
         path=path,
         notice=notice,
     )

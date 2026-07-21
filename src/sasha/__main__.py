@@ -57,6 +57,7 @@ def main(argv: list[str] | None = None) -> int:
         os.getcwd(),
         dict(os.environ),
         stderr_capture_bytes=limits.stderr_capture_bytes,
+        sensitive_path_patterns=config.sensitive_paths,
     )
 
     mutes = MuteStore(state_dir / "mutes.json", threshold=limits.mute_threshold)

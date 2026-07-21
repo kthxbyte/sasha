@@ -6,6 +6,7 @@ import re
 from typing import Callable
 
 from sasha import memory
+from sasha import safe_commands
 from sasha.executor import Executor
 
 _READ_FILE_MAX_CHARS = 40000
@@ -22,10 +23,11 @@ class ToolResult:
 class Tool:
     name: str
     schema: dict
-    requires_confirmation: bool
+    requires_confirmation: bool | Callable[[dict, Executor], bool]
     confirmation_summary: Callable[[dict], str] | None
     handler: Callable[[dict, Executor], ToolResult]
     repetition_key: Callable[[dict], object]
+    announce_when_auto_approved: bool = False
 
 
 def _safe_path(raw_path: str, cwd: str) -> pathlib.Path | None:
@@ -169,10 +171,11 @@ REGISTRY: dict[str, Tool] = {
                 },
             },
         },
-        requires_confirmation=True,
+        requires_confirmation=safe_commands.requires_confirmation,
         confirmation_summary=lambda args: args.get("command", ""),
         handler=lambda args, executor: ToolResult(_run_command_result(args, executor)),
         repetition_key=lambda args: args.get("command", ""),
+        announce_when_auto_approved=True,
     ),
     "write_file": Tool(
         name="write_file",

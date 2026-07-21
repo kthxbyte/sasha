@@ -41,7 +41,11 @@ def run_consult(
             final_arguments = call.arguments
             executed = False
 
-            if tool.requires_confirmation:
+            needs_confirmation = tool.requires_confirmation
+            if callable(needs_confirmation):
+                needs_confirmation = needs_confirmation(call.arguments, executor)
+
+            if needs_confirmation:
                 summary = tool.confirmation_summary(call.arguments)
                 description = call.arguments.get("description", "")
                 verdict, payload = confirmer.ask(summary, description)
@@ -62,6 +66,8 @@ def run_consult(
                     result = tool.handler(final_arguments, executor)
                     result_str = result.text
             else:
+                if tool.announce_when_auto_approved:
+                    out(f"[sasha] ran (auto-approved): {final_arguments.get('command', '')}")
                 result = tool.handler(final_arguments, executor)
                 result_str = result.text
                 executed = True
