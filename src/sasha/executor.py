@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import fcntl
 import os
+import pathlib
 import pty
 import re
 import select
@@ -10,6 +11,7 @@ import shlex
 import signal
 import struct
 import subprocess
+import sys
 import termios
 import time
 
@@ -73,12 +75,6 @@ class Executor:
         read_fd, write_fd = os.pipe()
         fcntl.fcntl(write_fd, fcntl.F_SETFD, 0)
 
-        wrapped = (
-            f"trap 'pwd -P >&{write_fd}; "
-            f'printf "\\0" >&{write_fd}; '
-            f"export -p >&{write_fd}' EXIT; {line}"
-        )
-
         child_env = dict(self._env)
         child_env["SASHA_STATE_FD"] = str(write_fd)
 
@@ -87,6 +83,40 @@ class Executor:
         out_slave = None
         if capture_stdout:
             out_master, out_slave = pty.openpty()
+
+        # --- keystroke relay helper (interactive only) ----------------------
+        # See docs/superpowers/specs/2026-07-21-issue-040-foreground-relay-helper-design.md.
+        # err_master (and out_master) must survive the child's execve so a
+        # helper sharing the child's foreground process group can relay real
+        # keystrokes into whichever one a program (e.g. a pager) puts into
+        # raw mode -- Sasha's own process cannot read fd 0 once it hands
+        # foreground-of-terminal status to the child.
+        relay_prefix = ""
+        if interactive:
+            fcntl.fcntl(err_master, fcntl.F_SETFD, 0)
+            relay_fds = [str(err_master)]
+            if out_master is not None:
+                fcntl.fcntl(out_master, fcntl.F_SETFD, 0)
+                relay_fds.append(str(out_master))
+            helper_path = str(
+                pathlib.Path(__file__).resolve().parent / "_kb_relay_helper.py")
+            # bash redirects a backgrounded job's stdin to /dev/null when
+            # job control isn't active (always true here, a non-interactive
+            # script) unless an explicit redirect is already given -- <&0
+            # overrides that so the helper keeps the real fd 0.
+            relay_prefix = (
+                f"{shlex.quote(sys.executable)} {shlex.quote(helper_path)} "
+                f"{' '.join(relay_fds)} <&0 & __sasha_relay_pid=$!; "
+            )
+
+        wrapped = (
+            relay_prefix
+            + "trap '"
+            + ("kill $__sasha_relay_pid 2>/dev/null; " if interactive else "")
+            + f"pwd -P >&{write_fd}; "
+            f'printf "\\0" >&{write_fd}; '
+            f"export -p >&{write_fd}' EXIT; {line}"
+        )
 
         try:
             if os.isatty(2):
@@ -147,9 +177,10 @@ class Executor:
                 pass
             try:
                 os.close(read_fd)
-                os.close(err_master)
-                if out_master is not None:
-                    os.close(out_master)
+                if not interactive:
+                    os.close(err_master)
+                    if out_master is not None:
+                        os.close(out_master)
                 if chld_read is not None:
                     os.close(chld_read)
                 if chld_write is not None:
