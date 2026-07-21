@@ -108,3 +108,8 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 21 — Safe command auto-approval (ISSUE-041)
 
 - [x] Task 21.1 — safe_commands.py classifier + tools/agent/config/executor wiring for run_command auto-approval
+
+## Phase 22 — Tool-call logging (ISSUE-042)
+
+- [ ] Task 22.1 — tool_log.py core write path + safe_commands.touches_sensitive_path extraction + agent.py hook ← current
+- [ ] Task 22.2 — compaction (background thread), [tool_log] config, sasha compact-log command
