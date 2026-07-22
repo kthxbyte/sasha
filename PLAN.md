@@ -133,4 +133,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 27 — Scope activity indicator away from raw commands (ISSUE-048)
 
-- [ ] Task 27.1 — remove ActivityIndicator wrap around the raw-typed command path ← current
+- [x] Task 27.1 — remove ActivityIndicator wrap around the raw-typed command path
