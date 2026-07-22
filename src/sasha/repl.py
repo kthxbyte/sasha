@@ -558,10 +558,10 @@ class TerminalConfirmer:
             return ("reply", response)
 
 
-_SASHA_COLOR = "\x1b[36m"   # cyan
-_LLM_COLOR = "\x1b[35m"     # magenta
-_PROMPT_COLOR = "\x1b[32m"  # green
-_COMMAND_COLOR = "\x1b[33m"  # yellow — the literal command about to run
+_SASHA_COLOR = "\x1b[1;36m"   # bold cyan
+_LLM_COLOR = "\x1b[1;35m"     # bold magenta
+_PROMPT_COLOR = "\x1b[1;32m"  # bold green
+_COMMAND_COLOR = "\x1b[1;33m"  # bold yellow — the literal command about to run
 _DIM = "\x1b[2m"             # faint — secondary/explanatory text
 _RESET = "\x1b[0m"
 _RL_IGNORE_START = "\001"
