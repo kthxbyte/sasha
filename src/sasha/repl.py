@@ -460,9 +460,7 @@ class Repl:
             self._consult(prompt)
             return True
 
-        self._activity.start("tool")
         result = self._executor.run(stripped)
-        self._activity.stop()
 
         result_text = f"exit code: {result.exit_code}\nstderr:\n{result.stderr_text}"
         result_omitted_reason = None
