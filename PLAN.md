@@ -130,3 +130,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 26.1 — activity_indicator.py + agent.py on_phase hook + repl.py/config.py wiring
 - [x] Task 26.2 — remove the Phase 19 busy-star mechanism
+
+## Phase 27 — Scope activity indicator away from raw commands (ISSUE-048)
+
+- [ ] Task 27.1 — remove ActivityIndicator wrap around the raw-typed command path ← current

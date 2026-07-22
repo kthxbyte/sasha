@@ -306,17 +306,18 @@ def _repl(cwd, color_enabled=True, activity_enabled=True):
     return repl, executor, sink
 
 
-def test_ac12_raw_command_wrapped_with_tool_phase():
+def test_ac12_raw_command_not_wrapped_with_activity_indicator():
+    # ISSUE-048: raw-typed commands hand the child real foreground terminal
+    # control (Executor.run()'s tcsetpgrp handoff), so the indicator's
+    # cursor toggling must not run alongside full-screen apps (nano, mc,
+    # git log's pager) invoked this way. Inverted from the original AC12,
+    # which pinned the opposite (now-removed) behavior.
     repl, executor, sink = _repl("/tmp")
     spy = SpyActivity()
     repl._activity = spy
     repl.run_once("echo hi")
 
-    assert ("start", "tool") in spy.calls
-    assert ("stop", None) in spy.calls
-    start_idx = spy.calls.index(("start", "tool"))
-    stop_idx = spy.calls.index(("stop", None))
-    assert start_idx < stop_idx
+    assert spy.calls == []
 
 
 def test_ac13_consult_stops_activity_on_chat_error():
