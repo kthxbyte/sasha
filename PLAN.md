@@ -134,3 +134,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 27 — Scope activity indicator away from raw commands (ISSUE-048)
 
 - [x] Task 27.1 — remove ActivityIndicator wrap around the raw-typed command path
+
+## Phase 28 — Bold TerminalSink colors (ISSUE-046)
+
+- [ ] Task 28.1 — bold _SASHA_COLOR/_LLM_COLOR/_PROMPT_COLOR/_COMMAND_COLOR, leave _DIM alone ← current
