@@ -137,4 +137,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 28 — Bold TerminalSink colors (ISSUE-046)
 
-- [ ] Task 28.1 — bold _SASHA_COLOR/_LLM_COLOR/_PROMPT_COLOR/_COMMAND_COLOR, leave _DIM alone ← current
+- [x] Task 28.1 — bold _SASHA_COLOR/_LLM_COLOR/_PROMPT_COLOR/_COMMAND_COLOR, leave _DIM alone
