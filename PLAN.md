@@ -141,4 +141,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 29 — LLM request debug log (ISSUE-047 investigation tooling)
 
-- [ ] Task 29.1 — llm_debug.py + config + llm.py/__main__.py wiring ← current
+- [x] Task 29.1 — llm_debug.py + config + llm.py/__main__.py wiring
