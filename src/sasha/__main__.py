@@ -7,6 +7,7 @@ import sys
 
 from sasha import completion
 from sasha import personality
+from sasha import llm_debug
 from sasha import tool_log
 from sasha.config import ConfigError, load
 from sasha.executor import Executor
@@ -44,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     tool_log.configure(config.tool_log_max_size_mb)
+    llm_debug.configure(config.llm_debug_enabled)
 
     profile_name = args.profile or config.default_profile
     if profile_name not in config.profiles:

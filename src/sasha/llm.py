@@ -7,6 +7,7 @@ import urllib.error
 from typing import Callable, Any
 
 from sasha.config import Profile
+from sasha import llm_debug
 
 @dataclasses.dataclass(frozen=True)
 class ToolCall:
@@ -43,6 +44,9 @@ class ChatClient:
         }
         if tools:
             payload["tools"] = tools
+
+        llm_debug.log_request(profile=self.profile.name, model=self.profile.model,
+                               messages=messages, tools=tools)
 
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), method="POST")
         req.add_header("Content-Type", "application/json")

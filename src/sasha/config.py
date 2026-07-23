@@ -47,6 +47,7 @@ class Config:
     activity_indicator_interval_s: float = 0.05
     activity_indicator_thinking_color: str = "#C084FC"
     activity_indicator_tool_color: str = "#FFD700"
+    llm_debug_enabled: bool = False
     path: pathlib.Path | None = None
     notice: str | None = None
 
@@ -146,6 +147,9 @@ enabled = true
 interval_s = 0.05
 thinking_color = "#C084FC"
 tool_color = "#FFD700"
+
+[llm_debug]
+enabled = false
 """
 
 
@@ -249,6 +253,13 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         if isinstance(raw_tool, str) and raw_tool:
             activity_indicator_tool_color = raw_tool
 
+    llm_debug_enabled = False
+    llm_debug_table = raw.get("llm_debug", {})
+    if isinstance(llm_debug_table, dict):
+        raw_llm_debug_enabled = llm_debug_table.get("enabled")
+        if isinstance(raw_llm_debug_enabled, bool):
+            llm_debug_enabled = raw_llm_debug_enabled
+
     if default_profile_name not in profile_fields_by_name:
         raise ConfigError(
             f"default_profile '{default_profile_name}' not found in profiles"
@@ -275,6 +286,7 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         activity_indicator_interval_s=activity_indicator_interval_s,
         activity_indicator_thinking_color=activity_indicator_thinking_color,
         activity_indicator_tool_color=activity_indicator_tool_color,
+        llm_debug_enabled=llm_debug_enabled,
         path=path,
         notice=notice,
     )
