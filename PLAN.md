@@ -138,3 +138,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 28 — Bold TerminalSink colors (ISSUE-046)
 
 - [x] Task 28.1 — bold _SASHA_COLOR/_LLM_COLOR/_PROMPT_COLOR/_COMMAND_COLOR, leave _DIM alone
+
+## Phase 29 — LLM request debug log (ISSUE-047 investigation tooling)
+
+- [ ] Task 29.1 — llm_debug.py + config + llm.py/__main__.py wiring ← current
