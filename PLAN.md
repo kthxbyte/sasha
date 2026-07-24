@@ -145,4 +145,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 30 — Drop synthetic continuation-turn cwd message (ISSUE-047 fix)
 
-- [ ] Task 30.1 — Session.build_messages() no longer synthesizes a bare cwd-only user turn ← current
+- [x] Task 30.1 — Session.build_messages() no longer synthesizes a bare cwd-only user turn
