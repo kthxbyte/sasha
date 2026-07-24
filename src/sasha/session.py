@@ -116,7 +116,8 @@ class Session:
             }
         else:
             base_text = ""
-            final_user_msg = {"role": "user", "content": context_block}
+            final_user_msg = ({"role": "user", "content": context_block}
+                               if self.notes else None)
 
         def get_current_total_estimate() -> int:
             total = sum(self._estimate_tokens(m) for m in history_to_trim)
@@ -129,7 +130,8 @@ class Session:
                 tool_call_ids = {tc["id"] for tc in oldest["tool_calls"]}
                 history_to_trim = [m for m in history_to_trim if not (m.get("role") == "tool" and m.get("tool_call_id") in tool_call_ids)]
 
-        messages = [self.system_prompt_dict()] + history_to_trim + [final_user_msg]
+        trailing = [final_user_msg] if final_user_msg is not None else []
+        messages = [self.system_prompt_dict()] + history_to_trim + trailing
         self.notes = []
         return messages
 
