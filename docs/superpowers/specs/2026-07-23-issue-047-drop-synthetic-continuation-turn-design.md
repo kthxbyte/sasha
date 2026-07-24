@@ -100,9 +100,10 @@ self.notes = []
 return messages
 ```
 
-New shape: the `if` branch is unchanged; the `else` branch no longer
-fabricates `final_user_msg` at all, and the final assembly only appends a
-trailing message when one was actually built:
+New shape: the `if` branch is unchanged; the `else` branch only fabricates
+`final_user_msg` when there's still something that needs to reach the
+model out-of-band (`self.notes` non-empty), and the final assembly only
+appends a trailing message when one was actually built:
 ```python
 if history_to_trim and history_to_trim[-1].get("role") == "user":
     last_user_msg = history_to_trim.pop()
@@ -113,7 +114,8 @@ if history_to_trim and history_to_trim[-1].get("role") == "user":
     }
 else:
     base_text = ""
-    final_user_msg = None
+    final_user_msg = ({"role": "user", "content": context_block}
+                       if self.notes else None)
 
 ...
 
@@ -125,6 +127,22 @@ return messages
 The token-trimming loop above this (which estimates `base_text` alongside
 `history_to_trim`) is unaffected — `base_text = ""` already contributes 0
 to the estimate in the no-pending-user case, same as before.
+
+**Why the `else` branch isn't simply `None` unconditionally:** `repl.py`'s
+exit-127 `AUTO_CONSULT` path (raw command exits 127 → auto-consult without
+the user typing `??`) calls `self._consult()` with **no** `auto_prompt`
+argument, so `Session.add_user()` is never invoked for that flow — there is
+no pending user message in history at all for that turn. The failed
+command's context (command line, exit code, stderr) reaches the LLM
+*entirely* through `self.notes` (populated by `note_command()` just before
+`_consult()` is called), folded into this exact `else` branch. An
+unconditional `None` silently drops that context and breaks
+`test_task_5_1_drop_127_preamble.py::test_ac1_no_verbose_preamble_sent_to_llm`
+(caught during scratch-worktree full-suite verification, not by the new
+task's own tests — none of the new tests populate `self.notes`, so they
+can't distinguish the two versions of the fix). The corrected condition
+keeps this legitimate case working: build a context-only trailing message
+only when `self.notes` actually has something to say; otherwise, drop it.
 
 ## 5. Decisions log
 
@@ -141,6 +159,17 @@ to the estimate in the no-pending-user case, same as before.
   `build_messages(cwd)` call site doesn't need to know or care whether a
   trailing message gets attached — that's entirely `build_messages()`'s
   internal decision, keeping the fix isolated to one function.
+- **Decision:** The `else` branch is conditional on `self.notes`, not an
+  unconditional `None`. **Rationale:** discovered during full-suite
+  scratch-worktree verification of the fix (not by the task's own new
+  tests) that `repl.py`'s exit-127 `AUTO_CONSULT` path relies on this exact
+  branch to deliver a failed command's context via `self.notes` — it never
+  calls `add_user()`. An unconditional `None` regressed
+  `test_task_5_1_drop_127_preamble.py::test_ac1_no_verbose_preamble_sent_to_llm`.
+  See §4 for the mechanism. This is why the task's own contract tests
+  (which never populate `self.notes`) can't tell the two versions apart —
+  the full suite is what caught it, reinforcing why `verify.sh`/the task
+  spec require the whole suite green, not just the new tests.
 
 ## 6. Testing strategy
 

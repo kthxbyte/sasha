@@ -142,3 +142,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 29 — LLM request debug log (ISSUE-047 investigation tooling)
 
 - [x] Task 29.1 — llm_debug.py + config + llm.py/__main__.py wiring
+
+## Phase 30 — Drop synthetic continuation-turn cwd message (ISSUE-047 fix)
+
+- [ ] Task 30.1 — Session.build_messages() no longer synthesizes a bare cwd-only user turn ← current
