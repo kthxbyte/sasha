@@ -149,4 +149,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 31 — Reasoning-stage coloring + tool-turn display framing (ISSUE-049)
 
-- [ ] Task 31.1 — on_reasoning/on_status/on_warning plumbing, TerminalSink chunk-run-kind + reasoning color, round-separator newlines, enriched stopping message ← current
+- [x] Task 31.1 — on_reasoning/on_status/on_warning plumbing, TerminalSink chunk-run-kind + reasoning color, round-separator newlines, enriched stopping message
