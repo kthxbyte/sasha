@@ -569,9 +569,10 @@ _RL_IGNORE_END = "\002"
 
 
 class TerminalSink:
-    def __init__(self) -> None:
+    def __init__(self, sasha_color: str = _SASHA_COLOR) -> None:
         self.color_enabled = (sys.stdout.isatty()
                               and "NO_COLOR" not in os.environ)
+        self._sasha_color = sasha_color
         self._ends_in_newline = True
         self._chunk_run_open = False
 
@@ -589,7 +590,7 @@ class TerminalSink:
         self._close_chunk_run()
         if not self._ends_in_newline:
             sys.stdout.write("\n")
-        print(self._wrap(text, _SASHA_COLOR))
+        print(self._wrap(text, self._sasha_color))
         self._ends_in_newline = True
 
     def write_chunk(self, text: str) -> None:

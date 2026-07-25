@@ -8,6 +8,7 @@ import sys
 from sasha import completion
 from sasha import personality
 from sasha import llm_debug
+from sasha import prompt as prompt_mod
 from sasha import tool_log
 from sasha.config import ConfigError, load
 from sasha.executor import Executor
@@ -74,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
 
     client_factory = lambda p: ChatClient(p)
 
-    sink = TerminalSink()
+    sink = TerminalSink(sasha_color=prompt_mod.COLOR_TOKENS[config.sasha_color])
 
     if personality_result.notice:
         sink.write_line(personality_result.notice)

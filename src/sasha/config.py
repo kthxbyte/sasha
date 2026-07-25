@@ -41,6 +41,7 @@ class Config:
     profiles: dict[str, Profile]
     limits: Limits
     prompt: str = prompt.DEFAULT_TEMPLATE
+    sasha_color: str = "bold-cyan"
     sensitive_paths: tuple[str, ...] = _DEFAULT_SENSITIVE_PATHS
     tool_log_max_size_mb: int = 100
     activity_indicator_enabled: bool = True
@@ -199,6 +200,12 @@ def _build_config(raw: dict, path: pathlib.Path | None,
     except prompt.PromptError as exc:
         raise ConfigError(str(exc)) from exc
 
+    sasha_color = raw.get("sasha_color", "bold-cyan")
+    if not isinstance(sasha_color, str) or sasha_color not in prompt.COLOR_TOKENS:
+        valid = ", ".join(sorted(prompt.COLOR_TOKENS))
+        raise ConfigError(
+            f"invalid sasha_color '{sasha_color}' — valid tokens: {valid}")
+
     profile_fields_by_name = _build_default_profiles()
 
     for name, table in raw.get("profiles", {}).items():
@@ -280,6 +287,7 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         profiles=profiles,
         limits=limits,
         prompt=prompt_template,
+        sasha_color=sasha_color,
         sensitive_paths=sensitive_paths,
         tool_log_max_size_mb=tool_log_max_size_mb,
         activity_indicator_enabled=activity_indicator_enabled,
