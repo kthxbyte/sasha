@@ -21,11 +21,13 @@ def run_consult(
     on_reasoning: Callable[[str], None] = lambda chunk: None,
     on_status: Callable[[str], None] | None = None,
     on_warning: Callable[[str], None] | None = None,
+    on_async_status: Callable[[str], None] | None = None,
     max_tool_turns: int = 10,
     on_phase: Callable[[str | None], None] = lambda phase: None,
 ) -> None:
     status = on_status if on_status is not None else out
     warn = on_warning if on_warning is not None else out
+    async_status = on_async_status if on_async_status is not None else status
     previous_key: tuple | None = None
     tool_turns = 0
 
@@ -135,7 +137,7 @@ def run_consult(
                 result_text=result_text,
                 result_omitted_reason=result_omitted_reason,
             )
-            tool_log.check_and_maybe_compact_async(status)
+            tool_log.check_and_maybe_compact_async(async_status)
 
             if executed:
                 current_key = (call.name, tool.repetition_key(final_arguments))

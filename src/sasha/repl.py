@@ -95,6 +95,8 @@ class Repl:
             client = self._client_factory(self._current_profile)
             on_reasoning = getattr(self._sink, "write_reasoning_chunk",
                                    self._sink.write_chunk)
+            on_async_status = getattr(self._sink, "write_async_line",
+                                      self._sink.write_line)
 
             def _on_warning(text):
                 try:
@@ -107,6 +109,7 @@ class Repl:
                         on_reasoning=on_reasoning,
                         on_status=self._sink.write_line,
                         on_warning=_on_warning,
+                        on_async_status=on_async_status,
                         max_tool_turns=self._config.limits.max_tool_turns,
                         on_phase=self._on_activity_phase)
         except ChatError as e:
@@ -319,8 +322,9 @@ class Repl:
         if lines:
             for line in lines:
                 memory.encode_bootstrap(repo_root, line)
-            self._sink.write_line(
-                self._bootstrap_finish_message(len(lines), docs))
+            write_async_line = getattr(self._sink, "write_async_line",
+                                       self._sink.write_line)
+            write_async_line(self._bootstrap_finish_message(len(lines), docs))
             self._clear_bootstrap_pending(repo_root)
 
     def _clear_bootstrap_pending(self, repo_root):
@@ -611,6 +615,18 @@ class TerminalSink:
         self._close_chunk_run()
         if not self._ends_in_newline:
             sys.stdout.write("\n")
+        print(self._wrap(text, color if color is not None else self._sasha_color))
+        self._ends_in_newline = True
+
+    def write_async_line(self, text: str, color: str | None = None) -> None:
+        """Like write_line(), but for messages that can arrive from a
+        background thread at an unpredictable time relative to the
+        interactive prompt — which is printed via input() directly,
+        bypassing this sink, so _ends_in_newline can't be trusted to know
+        whether the terminal is actually at a fresh line. Always writes a
+        leading newline unconditionally rather than checking that state."""
+        self._close_chunk_run()
+        sys.stdout.write("\n")
         print(self._wrap(text, color if color is not None else self._sasha_color))
         self._ends_in_newline = True
 
