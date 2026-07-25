@@ -75,7 +75,8 @@ def main(argv: list[str] | None = None) -> int:
 
     client_factory = lambda p: ChatClient(p)
 
-    sink = TerminalSink(sasha_color=prompt_mod.COLOR_TOKENS[config.sasha_color])
+    sink = TerminalSink(sasha_color=prompt_mod.COLOR_TOKENS[config.sasha_color],
+                        reasoning_color=prompt_mod.COLOR_TOKENS[config.reasoning_color])
 
     if personality_result.notice:
         sink.write_line(personality_result.notice)

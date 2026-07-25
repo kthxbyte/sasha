@@ -75,21 +75,38 @@ class Repl:
         self._memory_dir_existed = False
         self._bootstrap_attempted = set()      # set[pathlib.Path]
         self._last_bootstrap_thread = None     # threading.Thread | None, test seam
+        self._phase_needs_newline = False
 
     def _on_activity_phase(self, phase):
         if phase is None:
             self._activity.stop()
         else:
+            if self._phase_needs_newline:
+                self._sink.ensure_newline()
+            self._phase_needs_newline = True
             self._activity.start(phase)
 
     def _consult(self, auto_prompt=None):
         if auto_prompt:
             self._session.add_user(auto_prompt)
+        self._phase_needs_newline = False
         self._sink.write_line("[sasha] thinking…")
         try:
             client = self._client_factory(self._current_profile)
+            on_reasoning = getattr(self._sink, "write_reasoning_chunk",
+                                   self._sink.write_chunk)
+
+            def _on_warning(text):
+                try:
+                    self._sink.write_line(text, color=_WARNING_COLOR)
+                except TypeError:
+                    self._sink.write_line(text)
+
             run_consult(self._session, client, self._executor,
                         self._confirmer, self._sink.write_chunk,
+                        on_reasoning=on_reasoning,
+                        on_status=self._sink.write_line,
+                        on_warning=_on_warning,
                         max_tool_turns=self._config.limits.max_tool_turns,
                         on_phase=self._on_activity_phase)
         except ChatError as e:
@@ -563,18 +580,22 @@ _LLM_COLOR = "\x1b[1;35m"     # bold magenta
 _PROMPT_COLOR = "\x1b[1;32m"  # bold green
 _COMMAND_COLOR = "\x1b[1;33m"  # bold yellow — the literal command about to run
 _DIM = "\x1b[2m"             # faint — secondary/explanatory text
+_REASONING_COLOR = "\x1b[2;37m"  # dim white — thinking/reasoning-stage text
+_WARNING_COLOR = "\x1b[1;5;31m"  # bold, blink, red — repetition/turn-limit stop only
 _RESET = "\x1b[0m"
 _RL_IGNORE_START = "\001"
 _RL_IGNORE_END = "\002"
 
 
 class TerminalSink:
-    def __init__(self, sasha_color: str = _SASHA_COLOR) -> None:
+    def __init__(self, sasha_color: str = _SASHA_COLOR,
+                 reasoning_color: str = _REASONING_COLOR) -> None:
         self.color_enabled = (sys.stdout.isatty()
                               and "NO_COLOR" not in os.environ)
         self._sasha_color = sasha_color
+        self._reasoning_color = reasoning_color
         self._ends_in_newline = True
-        self._chunk_run_open = False
+        self._chunk_run_kind = None   # None | "llm" | "reasoning"
 
     def _wrap(self, text: str, color: str) -> str:
         if not self.color_enabled:
@@ -582,26 +603,39 @@ class TerminalSink:
         return f"{color}{text}{_RESET}"
 
     def _close_chunk_run(self) -> None:
-        if self._chunk_run_open:
+        if self._chunk_run_kind is not None:
             sys.stdout.write(_RESET)
-            self._chunk_run_open = False
+            self._chunk_run_kind = None
 
-    def write_line(self, text: str) -> None:
+    def write_line(self, text: str, color: str | None = None) -> None:
         self._close_chunk_run()
         if not self._ends_in_newline:
             sys.stdout.write("\n")
-        print(self._wrap(text, self._sasha_color))
+        print(self._wrap(text, color if color is not None else self._sasha_color))
         self._ends_in_newline = True
 
-    def write_chunk(self, text: str) -> None:
+    def _write_colored_chunk(self, text: str, kind: str, color: str) -> None:
         if not text:
             return
-        if self.color_enabled and not self._chunk_run_open:
-            sys.stdout.write(_LLM_COLOR)
-            self._chunk_run_open = True
+        if self.color_enabled:
+            if self._chunk_run_kind is not None and self._chunk_run_kind != kind:
+                sys.stdout.write(_RESET)
+                if not self._ends_in_newline:
+                    sys.stdout.write("\n")
+                    self._ends_in_newline = True
+                self._chunk_run_kind = None
+            if self._chunk_run_kind != kind:
+                sys.stdout.write(color)
+                self._chunk_run_kind = kind
         sys.stdout.write(text)
         sys.stdout.flush()
         self._ends_in_newline = text.endswith("\n")
+
+    def write_chunk(self, text: str) -> None:
+        self._write_colored_chunk(text, "llm", _LLM_COLOR)
+
+    def write_reasoning_chunk(self, text: str) -> None:
+        self._write_colored_chunk(text, "reasoning", self._reasoning_color)
 
     def ensure_newline(self) -> None:
         self._close_chunk_run()

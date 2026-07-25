@@ -34,7 +34,8 @@ class ChatClient:
         self.timeout_s = timeout_s
 
     def chat(self, messages: list[dict], tools: list[dict], 
-             on_text: Callable[[str], None]) -> ChatResponse:
+             on_text: Callable[[str], None],
+             on_reasoning: Callable[[str], None] = lambda chunk: None) -> ChatResponse:
         url = f"{self.profile.base_url.rstrip('/')}/chat/completions"
         
         payload = {
@@ -89,6 +90,9 @@ class ChatClient:
                         content = delta["content"]
                         full_text += content
                         on_text(content)
+
+                    if "reasoning_content" in delta and delta["reasoning_content"]:
+                        on_reasoning(delta["reasoning_content"])
 
                     if "tool_calls" in delta:
                         for tc_delta in delta["tool_calls"]:

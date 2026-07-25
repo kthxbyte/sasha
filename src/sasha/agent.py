@@ -18,9 +18,14 @@ def run_consult(
     executor: Executor,
     confirmer: Confirmer,
     out: Callable[[str], None],
+    on_reasoning: Callable[[str], None] = lambda chunk: None,
+    on_status: Callable[[str], None] | None = None,
+    on_warning: Callable[[str], None] | None = None,
     max_tool_turns: int = 10,
     on_phase: Callable[[str | None], None] = lambda phase: None,
 ) -> None:
+    status = on_status if on_status is not None else out
+    warn = on_warning if on_warning is not None else out
     previous_key: tuple | None = None
     tool_turns = 0
 
@@ -35,7 +40,15 @@ def run_consult(
                 stopped = True
             out(chunk)
 
-        response = client.chat(messages, tools=tools, on_text=_on_text)
+        def _on_reasoning(chunk):
+            nonlocal stopped
+            if not stopped:
+                on_phase(None)
+                stopped = True
+            on_reasoning(chunk)
+
+        response = client.chat(messages, tools=tools, on_text=_on_text,
+                                on_reasoning=_on_reasoning)
         on_phase(None)
         return response
 
@@ -49,6 +62,7 @@ def run_consult(
             return
 
         current_key: tuple | None = None
+        current_action: tuple | None = None
 
         for call in response.tool_calls:
             tool = REGISTRY.get(call.name)
@@ -90,7 +104,7 @@ def run_consult(
             else:
                 verdict = "auto-approved"
                 if tool.announce_when_auto_approved:
-                    out(f"[sasha] ran (auto-approved): {final_arguments.get('command', '')}")
+                    status(f"[sasha] ran (auto-approved): {final_arguments.get('command', '')}")
                 on_phase("tool")
                 result = tool.handler(final_arguments, executor)
                 on_phase(None)
@@ -121,17 +135,25 @@ def run_consult(
                 result_text=result_text,
                 result_omitted_reason=result_omitted_reason,
             )
-            tool_log.check_and_maybe_compact_async(out)
+            tool_log.check_and_maybe_compact_async(status)
 
             if executed:
                 current_key = (call.name, tool.repetition_key(final_arguments))
+                current_action = (call.name, final_arguments)
 
         if response.tool_calls:
             tool_turns += 1
             if ((current_key is not None and current_key == previous_key)
                     or tool_turns >= max_tool_turns):
-                out("[sasha] stopping: repeated identical action / "
-                    "tool-turn limit reached")
+                message = ("[sasha] stopping: repeated identical action / "
+                           "tool-turn limit reached")
+                if current_key is not None and current_key == previous_key:
+                    name, args = current_action
+                    desc = f"{name}({args})"
+                    if len(desc) > 200:
+                        desc = desc[:200] + "\u2026"
+                    message += f" \u2014 {desc}"
+                warn(message)
                 session.add_user("Answer in text now; no further commands will be run.")
                 final_messages = session.build_messages(executor.cwd)
                 final_response = _consult_llm(final_messages, [])
