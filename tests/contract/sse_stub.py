@@ -13,13 +13,17 @@ Usage:
     stub.requests  # -> [{"headers": {...lowercase keys...}, "body": {...}}, ...]
 
 Script entry kinds:
-    {"kind": "text", "text": str, "chunk_size": int = 5}
+    {"kind": "text", "text": str, "chunk_size": int = 5, "reasoning": str = ""}
         Streams the text as multiple content deltas, then finish/[DONE].
+        If "reasoning" is set, streams it first as reasoning_content deltas
+        (Task 31.1 — structurally separate field, not inline tags).
     {"kind": "tool_call", "id": str, "name": str,
-     "arguments": dict | str, "fragments": int = 3, "text": str = ""}
-        Optional text deltas first, then one tool call whose arguments JSON
-        is split across `fragments` SSE chunks. Pass `arguments` as a raw
-        string to script malformed-JSON arguments.
+     "arguments": dict | str, "fragments": int = 3, "text": str = "",
+     "reasoning": str = ""}
+        Optional reasoning_content deltas first, then optional text deltas,
+        then one tool call whose arguments JSON is split across `fragments`
+        SSE chunks. Pass `arguments` as a raw string to script malformed-JSON
+        arguments.
     {"kind": "http_error", "status": int}
         Plain HTTP error response, no stream.
     {"kind": "disconnect", "text": str = "partial"}
@@ -65,12 +69,16 @@ class StubServer:
                     self._plain(entry.get("status", 500), b'{"error":"scripted"}')
                 elif kind == "text":
                     self._sse_start()
+                    if entry.get("reasoning"):
+                        self._stream_reasoning(entry["reasoning"], entry.get("chunk_size", 5))
                     self._stream_text(entry["text"], entry.get("chunk_size", 5))
                     self._sse("{\"choices\":[{\"index\":0,\"delta\":{},"
                               "\"finish_reason\":\"stop\"}]}")
                     self._done()
                 elif kind == "tool_call":
                     self._sse_start()
+                    if entry.get("reasoning"):
+                        self._stream_reasoning(entry["reasoning"], entry.get("chunk_size", 5))
                     if entry.get("text"):
                         self._stream_text(entry["text"], entry.get("chunk_size", 5))
                     args = entry["arguments"]
@@ -122,6 +130,10 @@ class StubServer:
             def _stream_text(self, text, chunk_size):
                 for i in range(0, len(text), max(1, chunk_size)):
                     self._delta({"content": text[i:i + max(1, chunk_size)]})
+
+            def _stream_reasoning(self, text, chunk_size):
+                for i in range(0, len(text), max(1, chunk_size)):
+                    self._delta({"reasoning_content": text[i:i + max(1, chunk_size)]})
 
             def _done(self):
                 self.wfile.write(b"data: [DONE]\n\n")

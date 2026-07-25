@@ -237,25 +237,51 @@ not configurable.
 the default before config resolution), stored as `self._reasoning_color`.
 
 `_on_activity_phase` calls `ensure_newline()` before starting the indicator,
-for every non-`None` phase (both `"thinking"` and `"tool"`):
+for every non-`None` phase — except the very first phase transition of a
+consult, which is always redundant (`_consult()` already wrote a fresh
+"[sasha] thinking…" line immediately before it) and, per the decisions log
+below, exposes a mismatch in several existing tests' fake sink mocks:
 
 ```python
 def _on_activity_phase(self, phase):
     if phase is None:
         self._activity.stop()
     else:
-        self._sink.ensure_newline()
+        if self._phase_needs_newline:
+            self._sink.ensure_newline()
+        self._phase_needs_newline = True
         self._activity.start(phase)
 ```
 
-`_consult`'s `run_consult(...)` call adds:
+`_consult()` resets the flag at the top, before calling `run_consult`:
 
 ```python
+def _consult(self, auto_prompt=None):
+    if auto_prompt:
+        self._session.add_user(auto_prompt)
+    self._phase_needs_newline = False
+    self._sink.write_line("[sasha] thinking…")
+    ...
+```
+
+`_consult`'s `run_consult(...)` call adds, guarding against fake Sink test
+doubles that predate `write_reasoning_chunk`/`write_line`'s `color` param
+(per the decisions log below):
+
+```python
+on_reasoning = getattr(self._sink, "write_reasoning_chunk", self._sink.write_chunk)
+
+def _on_warning(text):
+    try:
+        self._sink.write_line(text, color=_WARNING_COLOR)
+    except TypeError:
+        self._sink.write_line(text)
+
 run_consult(self._session, client, self._executor, self._confirmer,
             self._sink.write_chunk,
-            on_reasoning=self._sink.write_reasoning_chunk,
+            on_reasoning=on_reasoning,
             on_status=self._sink.write_line,
-            on_warning=lambda text: self._sink.write_line(text, color=_WARNING_COLOR),
+            on_warning=_on_warning,
             max_tool_turns=self._config.limits.max_tool_turns,
             on_phase=self._on_activity_phase)
 ```
@@ -297,6 +323,44 @@ passed to `TerminalSink(..., reasoning_color=...)`.
   parallel, separate tracking scheme. **Rationale:** keeps one code path
   responsible for "is a colored run open and of what kind," avoiding two
   independently-maintained newline/reset mechanisms that could drift apart.
+- **Decision (found during scratch-worktree verification):** `repl.py`'s
+  `_consult()` wiring must not access `self._sink.write_reasoning_chunk`
+  unconditionally — several existing immutable contract tests
+  (`test_task_3_1_repl.py`, `test_task_3_4_repl_streaming.py`,
+  `test_task_5_1_drop_127_preamble.py`, `test_task_5_2_thinking_indicator.py`,
+  `test_task_17_3_repl_memory.py`, `test_task_26_1_activity_indicator.py`)
+  define their own minimal fake Sink classes that only implement
+  `write_line`/`write_chunk`/`ensure_newline`, not the new method. Since
+  Python evaluates keyword-argument expressions eagerly, a bare
+  `self._sink.write_reasoning_chunk` reference crashed all of them with
+  `AttributeError` before `run_consult` even started — caught by running
+  the *full* suite in a scratch worktree, not by this task's own new
+  tests (none of which use an old-style fake sink). **Fix:**
+  `on_reasoning = getattr(self._sink, "write_reasoning_chunk",
+  self._sink.write_chunk)` — old sinks get reasoning text routed through
+  their existing `write_chunk` (no special color, but no crash); the real
+  `TerminalSink` always has the method, so production behavior is
+  unaffected. The same reasoning applies to `on_warning`'s `color=` kwarg
+  on `write_line` — wrapped in a `try/except TypeError` fallback to a
+  plain `write_line(text)` call for the same class of old fake sinks.
+- **Decision (found during the same verification pass):** `_on_activity_phase`
+  must not call `ensure_newline()` on the *first* phase transition of a
+  consult. `test_task_3_4_repl_streaming.py::test_ac1_chunks_stream_through`
+  failed with a spurious leading `"\n"` before the streamed answer —
+  traced to that test's fake `ensure_newline()` mock, which (unlike the
+  real `TerminalSink`) doesn't know that a preceding `write_line()` call
+  already guarantees a fresh line, since its fake `write_line` doesn't
+  store an implicit trailing newline the way real `print()` does. Rather
+  than treat this as unfixable, the underlying call really is redundant
+  in production too: `_consult()` already writes "[sasha] thinking…" via
+  `write_line()` immediately before the first phase transition, so a
+  fresh line is already guaranteed there regardless. **Fix:** a per-consult
+  `self._phase_needs_newline` flag, reset to `False` at the top of
+  `_consult()`, set to `True` after the first phase transition — so
+  `ensure_newline()` is skipped exactly once per consult (the genuinely
+  redundant case) and still fires for every later phase transition
+  (tool phases, later tool-turn rounds), preserving the round-separator
+  fix's actual purpose.
 
 ## 6. Testing strategy
 
