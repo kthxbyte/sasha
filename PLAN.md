@@ -153,4 +153,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 32 — General context-injection syntax, applied to cwd (ISSUE-050)
 
-- [ ] Task 32.1 — [context:KEY] VALUE convention + system-prompt anchor; cwd delivered as a change-tracked history message, not glued onto the user message ← current
+- [x] Task 32.1 — [context:KEY] VALUE convention + system-prompt anchor; cwd delivered as a change-tracked history message, not glued onto the user message
