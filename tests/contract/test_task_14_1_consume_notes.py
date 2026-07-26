@@ -50,6 +50,10 @@ def test_ac2_last_stderr_cleared_after_one_build():
 # --- AC3: the first build still shows notes correctly (regression guard) ---
 
 def test_ac3_first_build_still_includes_notes():
+    # Amended by Tier 1 for Task 32.1 (ISSUE-050): cwd is no longer part
+    # of the notes-carrying user message -- it arrives as its own
+    # preceding [context:cwd] marker message instead. See
+    # docs/superpowers/specs/2026-07-26-issue-050-context-injection-syntax-design.md.
     from sasha.session import Session
 
     s = Session()
@@ -59,7 +63,7 @@ def test_ac3_first_build_still_includes_notes():
 
     msgs = s.build_messages("/project")
     content = msgs[-1]["content"]
-    assert "/project" in content
+    assert "[context:cwd] /project" in msgs[-2]["content"]
     assert "ls -la" in content
     assert "false" in content
     assert "why did the second one fail?" in content

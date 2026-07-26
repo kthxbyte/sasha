@@ -199,43 +199,94 @@ glued onto the pending user message. Only `notes` remain there.
   a new, separately-tested change, not something to build in now on
   speculation.
 
-## 6. Open question for implementation-time verification
+## 6. The marker/notes interaction (resolved by verification)
 
-The interaction between marker insertion and the existing no-pending-
-user-message branch (Task 30.1) needs contract-test coverage, not just
-prose reasoning: when there's no genuine pending user message and the
-marker gets *appended* (not inserted-before-last), it becomes the new
-last history entry with `role: "user"` — the existing "pop the last user
-message and attach notes to it" logic would then apply to the marker
-itself if `self.notes` is also non-empty that round. Whether that's the
-right behavior (folding notes into the same message as the marker) or
-needs its own branch is a genuine open question this design doesn't
-resolve in prose — it gets settled by writing the contract tests for both
-cases (marker alone, marker + notes together) and verifying the actual
-output shape in a scratch worktree before dispatch, per this project's
-established practice of verifying rather than assuming.
+This was flagged as an open question and has since been settled by
+building and testing the actual fix in a scratch worktree, not by prose
+reasoning alone. The naive version — appending the marker at the end when
+there's no pending user message, then letting the existing "pop the last
+user message and attach notes to it" logic run unchanged — does fold
+`self.notes` into the marker's own content whenever both apply in the
+same round, and (worse) a *stale* marker left over from an earlier call
+gets the same treatment on a later call if nothing else was added to
+history in between (a real pattern — `test_task_2_2_session.py` already
+exercises calling `build_messages()` twice in a row with nothing added).
+
+Both cases were wrong for the same underlying reason: a marker is purely
+informational, but `self.notes` describes a failed command the model is
+meant to actually engage with — folding them into one message loses that
+distinction. The fix has two parts:
+1. Whether there's a genuine pending user message is decided *before*
+   inserting any marker this call (`has_pending_user`), not by re-checking
+   `history[-1]`'s role afterward — so a marker just inserted this call is
+   never mistaken for one.
+2. Markers are also identifiable by content (`_is_context_marker()`,
+   checking a shared `[context:` prefix constant), so a *stale* marker
+   left over from an earlier call is never mistaken for a pending user
+   message either, regardless of how long ago it was inserted.
+
+With both fixes applied, a marker and notes appearing in the same round
+render as two separate trailing messages, never folded — verified
+directly (`s.build_messages(...)` inspected message-by-message) for both
+the freshly-inserted-marker case and the stale-marker case.
 
 ## 7. Testing strategy
 
-New contract test file, `tests/contract/test_task_32_1_context_injection_cwd.py`:
+New contract test file, `tests/contract/test_task_32_1_context_injection_cwd.py`
+(10 tests, all written and verified against the actual fix in a scratch
+worktree):
 1. First-ever `build_messages()` call inserts a `[context:cwd]` marker
    (covers "informed at boot" with no separate code path).
 2. A second call with the same `cwd` does not insert another marker.
 3. A call with a *different* `cwd` inserts a new marker.
 4. The marker lands *before* a pending user message, not after — the
-   final message in the array is still the user's real content (plus
-   notes, unchanged from today), not the marker.
+   final message in the array is still the user's real content, not the
+   marker.
 5. No pending user message (mid tool-turn-loop): the marker becomes the
-   last entry when there's no user message and no notes (replacing what
-   was previously an empty trailing array under Task 30.1's fix).
-6. `cwd` no longer appears in `context_lines`/the notes-only block —
-   `test_ac2_context_block_in_final_user_message` and
-   `test_ac2_stored_history_not_mutated_by_build`
-   (`test_task_2_2_session.py`) and the cwd-in-content assertion in
-   `test_task_14_1_consume_notes.py` need Tier-1 amendment to reflect
-   that cwd now arrives via its own message, not the notes block — this
-   is a genuine contract change, not a bug in those tests.
-7. The system prompt contains the new anchor sentence, and it's stable
-   (identical) across calls regardless of `cwd` changes — i.e., changing
-   `cwd` must not perturb `_build_system_prompt()`'s output at all.
-8. Full existing suite green after the three amendments above.
+   last entry when there's no notes.
+6. Marker + notes together (both freshly this call, and a stale marker
+   from an earlier call with notes added since) render as two separate
+   trailing messages, never folded — see §6.
+7. No marker needed, no notes: the array still ends on the actual last
+   history entry (Task 30.1's behavior preserved).
+8. `cwd` no longer appears anywhere in the notes-only block.
+9. The system prompt carries the new anchor sentence and is byte-identical
+   across calls regardless of `cwd` changes.
+
+### Existing tests amended (Tier-1, verified red-before/green-after)
+
+This turned out to be a much larger list than initially scoped —
+**16 existing tests across 5 files**, not the 3 originally estimated,
+because any change to the system prompt's exact text breaks every test
+asserting it byte-for-byte, and the cwd-marker's positional interaction
+with Task 30.1's no-pending-user branch affects two more tests that
+weren't part of the original estimate either. All 16 were amended
+directly (this contract is genuinely changing) and confirmed to fail
+against the unmodified code before the fix, and pass after:
+
+- `test_task_2_2_session.py`: `test_ac2_context_block_in_final_user_message`,
+  `test_ac2_stored_history_not_mutated_by_build` (cwd moved out of the
+  notes-carrying message's content into its own preceding marker).
+- `test_task_13_1_personality.py`: `test_ac5_default_personality_matches_prior_system_prompt`,
+  `test_ac6_custom_personality_prepended` (exact system-prompt string
+  gains the anchor sentence).
+- `test_task_14_1_consume_notes.py`: `test_ac3_first_build_still_includes_notes`
+  (same cwd-out-of-notes-message change as above).
+- `test_task_17_2_remember_tool.py`: all six tests whose local `_FUNCTIONAL`
+  constant asserts the exact functional block text (`test_ac_default_session_has_no_memory_block`,
+  `test_ac_set_memory_updates_system_prompt`, `test_ac_set_memory_is_live_not_fixed_at_construction`,
+  `test_ac_set_memory_empty_string_same_as_default`, `test_ac_memory_and_personality_both_present_personality_first`,
+  `test_ac_existing_personality_behavior_unaffected`).
+- `test_task_18_2_remember_general_session.py`: three tests with the same
+  `_FUNCTIONAL`-constant pattern (`test_ac_set_general_memory_updates_system_prompt`,
+  `test_ac_general_before_project_when_both_present`,
+  `test_ac_personality_general_project_functional_full_order`).
+- `test_task_30_1_no_synthetic_continuation_turn.py`:
+  `test_ac1_no_trailing_message_after_tool_result_with_no_pending_user`
+  (needed an extra `build_messages()` call first, to consume the
+  first-ever-call cwd marker before exercising the no-synthetic-turn
+  behavior it actually targets) and
+  `test_ac4_pending_user_message_still_gets_context_block` (same
+  cwd-moved-to-its-own-message change).
+
+Full suite green after all 16 amendments plus the 10 new tests: 620/620.

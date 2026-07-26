@@ -26,10 +26,18 @@ def _tool_response(call_id, command="ls", text=""):
 # --- AC1: no pending user message -> no synthetic trailing turn -------------
 
 def test_ac1_no_trailing_message_after_tool_result_with_no_pending_user():
+    # Amended by Tier 1 for Task 32.1 (ISSUE-050): the very first
+    # build_messages() call on a fresh Session always tells cwd via its
+    # own [context:cwd] marker message (boot-time awareness), so that
+    # call is made first here to consume it -- the same way a real
+    # consult's first round would -- before exercising the no-pending-
+    # user/no-synthetic-turn behavior this test actually targets. See
+    # docs/superpowers/specs/2026-07-26-issue-050-context-injection-syntax-design.md.
     from sasha.session import Session
 
     s = Session()
     s.add_user("do something")
+    s.build_messages("/somewhere")
     s.add_assistant(_tool_response("call_1", command="ls -la"))
     s.add_tool_result("call_1", "exit code: 0")
 
@@ -73,6 +81,9 @@ def test_ac3_multiple_continuation_rounds_never_synthesize_a_turn():
 # --- AC4: regression guard — pending user message still gets cwd/notes -----
 
 def test_ac4_pending_user_message_still_gets_context_block():
+    # Amended by Tier 1 for Task 32.1 (ISSUE-050): cwd now arrives as its
+    # own preceding [context:cwd] marker message rather than merged into
+    # the pending user message's own content.
     from sasha.session import Session
 
     s = Session()
@@ -82,7 +93,7 @@ def test_ac4_pending_user_message_still_gets_context_block():
 
     assert msgs[-1]["role"] == "user"
     assert "a real question" in msgs[-1]["content"]
-    assert "/regression-check-dir" in msgs[-1]["content"]
+    assert "[context:cwd] /regression-check-dir" in msgs[-2]["content"]
 
 
 # --- AC5: agent-level integration — second wire request has no synthetic

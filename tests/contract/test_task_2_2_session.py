@@ -59,6 +59,11 @@ def test_ac2_context_block_in_final_user_message():
     # from 10 to 5 now that each note also carries its own stderr_text
     # (previously a single separate last_stderr field, now removed). See
     # docs/superpowers/specs/task-25.1-raw-command-activity.md.
+    #
+    # Amended by Tier 1 for Task 32.1 (ISSUE-050): cwd is no longer part
+    # of the notes-carrying user message -- it arrives as its own
+    # preceding [context:cwd] marker message instead. See
+    # docs/superpowers/specs/2026-07-26-issue-050-context-injection-syntax-design.md.
     from sasha.session import Session
 
     s = Session()
@@ -73,7 +78,7 @@ def test_ac2_context_block_in_final_user_message():
     assert final["role"] == "user"
     content = final["content"]
     assert "why did that fail?" in content
-    assert "/probe/dir" in content
+    assert "[context:cwd] /probe/dir" in msgs[-2]["content"]
     for i in range(8, 13):
         assert f"probe-command-{i:02d}" in content
     for i in range(1, 8):
@@ -83,6 +88,10 @@ def test_ac2_context_block_in_final_user_message():
 
 
 def test_ac2_stored_history_not_mutated_by_build():
+    # Amended by Tier 1 for Task 32.1 (ISSUE-050): cwd now lives in its
+    # own change-tracked marker message, not the final user message's
+    # content -- "not accumulating across builds" is checked across the
+    # whole array instead.
     from sasha.session import Session
 
     s = Session()
@@ -90,7 +99,8 @@ def test_ac2_stored_history_not_mutated_by_build():
     s.build_messages("/somewhere")
     msgs = s.build_messages("/somewhere")
     # context block must not accumulate across builds
-    assert msgs[-1]["content"].count("/somewhere") == 1
+    all_text = "".join(str(m.get("content", "")) for m in msgs)
+    assert all_text.count("/somewhere") == 1
 
 
 # --- AC3: trimming -----------------------------------------------------------------

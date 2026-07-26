@@ -150,3 +150,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 31 — Reasoning-stage coloring + tool-turn display framing (ISSUE-049)
 
 - [x] Task 31.1 — on_reasoning/on_status/on_warning plumbing, TerminalSink chunk-run-kind + reasoning color, round-separator newlines, enriched stopping message
+
+## Phase 32 — General context-injection syntax, applied to cwd (ISSUE-050)
+
+- [ ] Task 32.1 — [context:KEY] VALUE convention + system-prompt anchor; cwd delivered as a change-tracked history message, not glued onto the user message ← current
