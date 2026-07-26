@@ -25,6 +25,9 @@ requiring a memory store.
   both print for the same `cd`).
 - A `[directory_recap]` config.toml section (`enabled = true` default) and
   a `sasha directory-recap on|off` builtin command.
+- A `sasha recap` builtin command: an explicit, on-demand, always-LLM
+  recap of the current directory, bypassing the cascade entirely (see
+  §4.7).
 
 ### Out of scope / non-goals:
 - Migrating the existing git-repo/memory recap (ISSUE-034/038) onto this
@@ -158,11 +161,12 @@ Reached when: (a) the umbrella check fired but the target is itself a git
 repo (the `mqtt` shape), or (b) stage 2's rules produced neither a SKIP
 nor a direct recap.
 
-**Input gathered before the call:** for the target and each of its child
-git repos (capped at 5), the last commit's subject + relative age (same
-`git log -1 --format=%ar: %s` call, one per repo); plus, if any exist, the
-most recent ~10 `tool_log.jsonl` entries under the target's subtree
-(executed command + relative age).
+**Input gathered before the call** (`directory_recap.gather_context(target)`,
+factored out as its own function so §4.7 can reuse it verbatim): for the
+target and each of its child git repos (capped at 5), the last commit's
+subject + relative age (same `git log -1 --format=%ar: %s` call, one per
+repo); plus, if any exist, the most recent ~10 `tool_log.jsonl` entries
+under the target's subtree (executed command + relative age).
 
 **Call:** uses whichever profile/`ChatClient` the current session's normal
 consult already uses — no dedicated model or endpoint config.
@@ -194,6 +198,24 @@ root, unlike `_check_place_shift`'s own dedup) — see contract #5. The
 cascade only runs when the existing git-repo/memory recap did not already
 print for that same transition (contract #4).
 
+### 4.7 `sasha recap` — explicit, on-demand, always-LLM
+
+A builtin command that bypasses the cascade entirely: the user is
+explicitly asking for the LLM-assisted recap, not asking Sasha to first
+judge whether one is warranted. On invocation, `repl.py` calls
+`directory_recap.gather_context(cwd)` (§4.5's input-gathering step,
+reused verbatim) and makes the LLM call with the same prompt contract
+(one line, or explicit "nothing coherent" if the gathered context is
+empty) — no umbrella check, no fan-out/staleness rules, no
+`self_is_git_root` branch.
+
+Unlike stage 3's passive trigger, this call runs **synchronously** — the
+user typed a command and is waiting on its answer, the same UX as `??`'s
+existing blocking consult. It also ignores both the gap-filler rule and
+the per-session dedup described above: it always runs, regardless of
+what the existing git-repo/memory recap or the passive cascade already
+printed for this `cd`.
+
 ## 5. Configuration
 
 New `[directory_recap]` section:
@@ -211,6 +233,11 @@ on|off`, flips it via a narrow `config.py` patcher function mirroring
 its own line, leaves comments/other sections byte-identical). This is
 deliberately not a general config-editing tool — see §2 non-goals.
 
+`enabled` only gates the passive on-`cd` cascade (§4.1–§4.6). `sasha
+recap` (§4.7) is an explicit command and always available regardless of
+this setting — turning off the ambient trigger says nothing about
+whether the on-demand tool should still work.
+
 ## 6. Testing strategy
 
 - Cascade decision logic (stages 1–2, the ordering in §4.1) tested as pure
@@ -223,6 +250,10 @@ deliberately not a general config-editing tool — see §2 non-goals.
   at the integration level: existing recap fires → new mechanism silent;
   existing recap has nothing to say → new mechanism runs; same path
   revisited same session → silent both times.
+- `sasha recap` tested separately from the cascade: always calls
+  `gather_context` + the LLM regardless of umbrella/fan-out/staleness
+  shape, runs synchronously, and still works with
+  `[directory_recap].enabled = false`.
 - The one permitted synchronous subprocess call (`git log -1` in the
   direct-recap branch) and stage 3's own git calls are exercised against
   real throwaway git repos created in test fixtures, not against
@@ -271,3 +302,11 @@ deliberately not a general config-editing tool — see §2 non-goals.
   brainstorming this design, but fixing it doesn't require or block
   anything this design needs, and folding it in would blur two unrelated
   fixes into one task.
+- **Decision:** `sasha recap` bypasses the cascade entirely and always
+  calls the LLM, runs synchronously, and ignores both the gap-filler rule
+  and `[directory_recap].enabled`.
+  **Rationale:** Salvador's explicit framing — the point of the command is
+  letting the user request LLM intervention directly, without Sasha first
+  judging whether it's warranted; that's a different intent from the
+  passive cascade and shouldn't inherit its restraint logic or its async
+  latency-hiding (the user is already waiting on this one, same as `??`).
