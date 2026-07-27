@@ -154,3 +154,8 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 32 — General context-injection syntax, applied to cwd (ISSUE-050)
 
 - [x] Task 32.1 — [context:KEY] VALUE convention + system-prompt anchor; cwd delivered as a change-tracked history message, not glued onto the user message
+
+## Phase 51 — Directory recap on explicit cd (ISSUE-051)
+
+- [ ] Task 51.1 — directory_recap.py cascade module (filesystem shape, cheap log rules, async LLM escalation) + repl.py gap-filler/dedup trigger wiring + config enabled flag ← current
+- [ ] Task 51.2 — sasha recap (explicit, sync, always-LLM) + sasha directory-recap on|off builtin + config.py enabled-toggle patcher
