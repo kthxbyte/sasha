@@ -1,6 +1,7 @@
 import dataclasses
 import getpass
 import os
+import pathlib
 import re
 import shlex
 import socket
@@ -13,6 +14,7 @@ import sasha.config as config
 from sasha.activity_indicator import ActivityIndicator
 from sasha.agent import run_consult
 from sasha.llm import ChatError
+from sasha import directory_recap
 from sasha import memory
 from sasha import safe_commands
 from sasha import tool_log
@@ -75,6 +77,8 @@ class Repl:
         self._memory_dir_existed = False
         self._bootstrap_attempted = set()      # set[pathlib.Path]
         self._last_bootstrap_thread = None     # threading.Thread | None, test seam
+        self._recapped_dirs: set[str] = set()
+        self._last_recap_thread = None
         self._phase_needs_newline = False
 
     def _on_activity_phase(self, phase):
@@ -249,19 +253,19 @@ class Repl:
                 f"[sasha] still {after_mb:.1f} MB even with all results "
                 f"stripped — consider deleting or archiving it")
 
-    def _check_place_shift(self):
+    def _check_place_shift(self) -> bool:
         cwd = self._executor.cwd
         if cwd == self._last_checked_cwd:
-            return
+            return False
         self._last_checked_cwd = cwd
         new_root = memory.resolve_git_root(cwd)
         if new_root == self._current_repo_root:
-            return
+            return False
         self._current_repo_root = new_root
         if new_root is None:
             self._session.set_project_memory("")
             self._memory_dir_existed = False
-            return
+            return False
         just_bootstrapped = False
         memory_dir = new_root / ".sasha" / "memory"
         pending_marker = memory_dir / ".bootstrap_pending"
@@ -277,6 +281,26 @@ class Repl:
             self._sink.write_line(
                 f'[sasha] project: {new_root.name} ({count} memories, '
                 f'last: "{gist}")')
+            return True
+        return False
+
+    def _check_directory_recap(self) -> None:
+        if not self._config.directory_recap_enabled:
+            return
+        cwd = self._executor.cwd
+        if cwd in self._recapped_dirs:
+            return
+        self._recapped_dirs.add(cwd)
+        verdict, text = directory_recap.decide(pathlib.Path(cwd))
+        if verdict == directory_recap.SILENT:
+            return
+        if verdict == directory_recap.RECAP_DIRECT:
+            self._sink.write_line(text)
+            return
+        on_result = getattr(self._sink, "write_async_line", self._sink.write_line)
+        self._last_recap_thread = directory_recap.escalate_async(
+            pathlib.Path(cwd), self._client_factory, self._current_profile,
+            on_result)
 
     def _bootstrap_repo(self, repo_root):
         history = memory.bounded_history(repo_root)
@@ -508,7 +532,8 @@ class Repl:
             self._sink.write_line("[sasha] Ctrl+Z not supported — command terminated")
             return True
 
-        self._check_place_shift()
+        if not self._check_place_shift():
+            self._check_directory_recap()
         self._check_commit(stripped, result)
         self._check_crash(stripped, result)
         self._check_memory_created()
@@ -532,7 +557,8 @@ class Repl:
             " Tip : type ?? followed by a question to chat with me directly")
         general_block, _ = memory.load_general_memory_block()
         self._session.set_general_memory(general_block)
-        self._check_place_shift()
+        if not self._check_place_shift():
+            self._check_directory_recap()
         home = os.path.expanduser("~")
         user = getpass.getuser()
         host = socket.gethostname()

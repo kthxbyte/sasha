@@ -50,6 +50,7 @@ class Config:
     activity_indicator_thinking_color: str = "#C084FC"
     activity_indicator_tool_color: str = "#FFD700"
     llm_debug_enabled: bool = False
+    directory_recap_enabled: bool = True
     path: pathlib.Path | None = None
     notice: str | None = None
 
@@ -152,6 +153,9 @@ tool_color = "#FFD700"
 
 [llm_debug]
 enabled = false
+
+[directory_recap]
+enabled = true
 """
 
 
@@ -274,6 +278,13 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         if isinstance(raw_llm_debug_enabled, bool):
             llm_debug_enabled = raw_llm_debug_enabled
 
+    directory_recap_enabled = True
+    directory_recap_table = raw.get("directory_recap", {})
+    if isinstance(directory_recap_table, dict):
+        raw_directory_recap_enabled = directory_recap_table.get("enabled")
+        if isinstance(raw_directory_recap_enabled, bool):
+            directory_recap_enabled = raw_directory_recap_enabled
+
     if default_profile_name not in profile_fields_by_name:
         raise ConfigError(
             f"default_profile '{default_profile_name}' not found in profiles"
@@ -303,6 +314,7 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         activity_indicator_thinking_color=activity_indicator_thinking_color,
         activity_indicator_tool_color=activity_indicator_tool_color,
         llm_debug_enabled=llm_debug_enabled,
+        directory_recap_enabled=directory_recap_enabled,
         path=path,
         notice=notice,
     )

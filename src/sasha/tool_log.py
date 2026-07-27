@@ -107,6 +107,10 @@ def _log_path() -> pathlib.Path:
     return base / "tool_log.jsonl"
 
 
+def log_path() -> pathlib.Path:
+    return _log_path()
+
+
 def _utc_timestamp() -> str:
     now = datetime.datetime.now(datetime.timezone.utc)
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
