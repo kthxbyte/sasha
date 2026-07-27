@@ -157,5 +157,5 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 51 — Directory recap on explicit cd (ISSUE-051)
 
-- [ ] Task 51.1 — directory_recap.py cascade module (filesystem shape, cheap log rules, async LLM escalation) + repl.py gap-filler/dedup trigger wiring + config enabled flag ← current
-- [ ] Task 51.2 — sasha recap (explicit, sync, always-LLM) + sasha directory-recap on|off builtin + config.py enabled-toggle patcher
+- [x] Task 51.1 — directory_recap.py cascade module (filesystem shape, cheap log rules, async LLM escalation) + repl.py gap-filler/dedup trigger wiring + config enabled flag
+- [ ] Task 51.2 — sasha recap (explicit, sync, always-LLM) + sasha directory-recap on|off builtin + config.py enabled-toggle patcher ← current
