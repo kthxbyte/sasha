@@ -183,12 +183,20 @@ class Repl:
             self._handle_forget_builtin()
         elif verb == "compact-log":
             self._handle_compact_log_builtin()
+        elif verb == "recap":
+            self._handle_recap_builtin()
+        elif verb == "directory-recap":
+            if len(tokens) >= 2:
+                self._handle_directory_recap_toggle(tokens[1])
+            else:
+                self._sink.write_line(f"[sasha] unknown command: {rest}")
         elif verb == "help":
             self._sink.write_line("[sasha] sasha mute <cmd> [<N>], "
                       "sasha unmute <cmd>, "
                       "sasha profile [<name>] (asks for a key if needed), "
                       "sasha memory, sasha forget, "
                       "sasha compact-log, "
+                      "sasha recap, sasha directory-recap on|off, "
                       "?? <question>")
         else:
             self._sink.write_line(f"[sasha] unknown command: {rest}")
@@ -252,6 +260,43 @@ class Repl:
             self._sink.write_line(
                 f"[sasha] still {after_mb:.1f} MB even with all results "
                 f"stripped — consider deleting or archiving it")
+
+    def _handle_recap_builtin(self):
+        cwd = self._executor.cwd
+        context = directory_recap.gather_context(pathlib.Path(cwd))
+        prompt = directory_recap.build_prompt(context)
+        self._sink.write_line("[sasha] thinking…")
+        try:
+            client = self._client_factory(self._current_profile)
+            client.chat([{"role": "user", "content": prompt}], [],
+                        self._sink.write_chunk)
+            self._sink.ensure_newline()
+        except ChatError as e:
+            self._sink.write_line(
+                f"[sasha] {self._current_profile.name} unreachable: "
+                f"{e.reason} — 'sasha profile <name>' to switch")
+
+    def _handle_directory_recap_toggle(self, arg):
+        if arg not in ("on", "off"):
+            self._sink.write_line(f"[sasha] unknown command: directory-recap {arg}")
+            return
+        enabled = (arg == "on")
+        if self._config.path is None:
+            self._sink.write_line(
+                "[sasha] couldn't update directory-recap setting: no "
+                "config file on disk — setting unchanged")
+            return
+        try:
+            config.set_directory_recap_enabled(self._config.path, enabled)
+        except config.ConfigError as e:
+            self._sink.write_line(
+                f"[sasha] couldn't update directory-recap setting: {e} "
+                f"— setting unchanged")
+            return
+        self._config = dataclasses.replace(
+            self._config, directory_recap_enabled=enabled)
+        state = "on" if enabled else "off"
+        self._sink.write_line(f"[sasha] directory-recap: {state}")
 
     def _check_place_shift(self) -> bool:
         cwd = self._executor.cwd

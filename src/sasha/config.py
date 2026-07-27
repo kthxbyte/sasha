@@ -388,3 +388,45 @@ def set_api_key(path: pathlib.Path, profile_name: str, api_key: str) -> None:
         path.write_text("".join(lines))
     except OSError as exc:
         raise ConfigError(f"couldn't write {path}: {exc}") from exc
+
+
+def set_directory_recap_enabled(path: pathlib.Path, enabled: bool) -> None:
+    try:
+        text = path.read_text()
+    except OSError as exc:
+        raise ConfigError(f"couldn't read {path}: {exc}") from exc
+
+    lines = text.splitlines(keepends=True)
+    header = "[directory_recap]"
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip() == header:
+            start = i
+            break
+    if start is None:
+        raise ConfigError(f"no [directory_recap] table in {path}")
+
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        stripped = lines[i].strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            end = i
+            break
+
+    enabled_line = f"enabled = {'true' if enabled else 'false'}\n"
+    key_re = re.compile(r"^\s*enabled\s*=")
+    found = None
+    for i in range(start + 1, end):
+        if key_re.match(lines[i]):
+            found = i
+            break
+
+    if found is not None:
+        lines[found] = enabled_line
+    else:
+        lines.insert(end, enabled_line)
+
+    try:
+        path.write_text("".join(lines))
+    except OSError as exc:
+        raise ConfigError(f"couldn't write {path}: {exc}") from exc
