@@ -64,15 +64,42 @@ class SashaProc:
         self.home = home
         self.state_dir = tmp_path / "xdg-state" / "sasha"
         self.transcript = b""
+        # Amended by Tier 1 for Task 54.1 (ISSUE-054): read_until() used
+        # to match anywhere in the whole cumulative transcript, so a call
+        # could be satisfied by a marker that had already appeared on an
+        # earlier round -- always loose, but harmless before this task.
+        # paste_join's burst-join now means back-to-back send() calls
+        # with no realistic gap can legitimately be treated as one pasted
+        # block (correct behavior for a real terminal paste); this test's
+        # own rapid send()/drain_prompt() loop was relying on that
+        # looseness to avoid ever truly waiting for the new round-trip to
+        # finish, so two of its own commands could land close enough
+        # together to be joined. Tracking how much of the transcript has
+        # already been matched forces every read_until()/drain_prompt()
+        # call to wait for a genuinely NEW occurrence, which fixes the
+        # race, but proved insufficient alone against back-to-back send()
+        # calls with literally zero gap -- see send()'s own note below.
+        self._consumed_upto = 0
 
     def send(self, line):
+        # Amended by Tier 1 for Task 54.1 (ISSUE-054): a real human never
+        # sends a second command with zero gap after the first -- burst-
+        # join is only meant to catch a genuine paste (all bytes arriving
+        # near-instantly with no interleaved keystrokes at all). This
+        # harness's own back-to-back send() calls have no such gap, so a
+        # brief sleep here restores that realistic timing rather than
+        # accidentally looking like one continuous paste to the new
+        # burst-detection heuristic.
         os.write(self.master, (line + "\r").encode())
+        time.sleep(0.05)
 
     def read_until(self, needle, timeout=25):
         deadline = time.monotonic() + timeout
         needle_b = needle.encode()
         while time.monotonic() < deadline:
-            if needle_b in self.transcript:
+            idx = self.transcript.find(needle_b, self._consumed_upto)
+            if idx != -1:
+                self._consumed_upto = idx + len(needle_b)
                 return self.transcript.decode("utf-8", errors="replace")
             r, _, _ = select.select([self.master], [], [], 0.25)
             if r:
@@ -91,10 +118,9 @@ class SashaProc:
         # Amended by Tier 1 for Task 26.2 (ISSUE-045): the busy-star (✦)
         # is removed from DEFAULT_TEMPLATE; "$ " (the prompt's own
         # trailing marker) is the replacement "a prompt was drawn"
-        # signal. Same reliability characteristics as before: transcript
-        # is cumulative, so this confirms a prompt has appeared at some
-        # point, not strictly the most recent one — matches the star's
-        # own pre-existing behavior, not a regression.
+        # signal. Amended again by Tier 1 for Task 54.1 (ISSUE-054):
+        # read_until()'s _consumed_upto tracking (see __init__) now
+        # guarantees this waits for a genuinely NEW prompt each call.
         return self.read_until("$ ")
 
     def close(self):

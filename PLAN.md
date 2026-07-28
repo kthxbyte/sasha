@@ -159,3 +159,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 51.1 — directory_recap.py cascade module (filesystem shape, cheap log rules, async LLM escalation) + repl.py gap-filler/dedup trigger wiring + config enabled flag
 - [x] Task 51.2 — sasha recap (explicit, sync, always-LLM) + sasha directory-recap on|off builtin + config.py enabled-toggle patcher
+
+## Phase 54 — Multi-line paste burst-join (ISSUE-054)
+
+- [ ] Task 54.1 — paste_join.py module + __main__.py wiring (unify Repl main prompt + TerminalConfirmer behind one paste-aware input function) ← current
