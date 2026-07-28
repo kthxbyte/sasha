@@ -3,9 +3,11 @@ import getpass
 import os
 import pathlib
 import readline
+import select
 import sys
 
 from sasha import completion
+from sasha import paste_join
 from sasha import personality
 from sasha import llm_debug
 from sasha import prompt as prompt_mod
@@ -16,6 +18,19 @@ from sasha.llm import ChatClient
 from sasha.mutes import MuteStore
 from sasha.repl import Repl, TerminalConfirmer, TerminalSink
 from sasha.session import Session
+
+_PASTE_GRACE_S = 0.01
+
+
+def _has_pending_stdin():
+    if not sys.stdin.isatty():
+        return False
+    r, _, _ = select.select([sys.stdin], [], [], _PASTE_GRACE_S)
+    return bool(r)
+
+
+def _joined_input(prompt):
+    return paste_join.read_joined_input(prompt, input, _has_pending_stdin)
 
 
 def _state_dir() -> pathlib.Path:
@@ -84,12 +99,12 @@ def main(argv: list[str] | None = None) -> int:
     if config.notice:
         sink.write_line(config.notice)
 
-    confirmer = TerminalConfirmer(input, sink)
+    confirmer = TerminalConfirmer(_joined_input, sink)
 
     _isatty = sys.stdin.isatty()
 
     def _repl_input(prompt):
-        line = input(prompt)
+        line = _joined_input(prompt)
         if line.strip() and not _isatty:
             readline.add_history(line)
         return line
