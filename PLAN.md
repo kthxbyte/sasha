@@ -162,4 +162,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 54 — Multi-line paste burst-join (ISSUE-054)
 
-- [ ] Task 54.1 — paste_join.py module + __main__.py wiring (unify Repl main prompt + TerminalConfirmer behind one paste-aware input function) ← current
+- [x] Task 54.1 — paste_join.py module + __main__.py wiring (unify Repl main prompt + TerminalConfirmer behind one paste-aware input function)
