@@ -20,6 +20,73 @@ STALE_DAYS = 14
 MAX_CHILD_REPOS_FOR_LLM = 5
 MAX_LOG_ENTRIES_FOR_LLM = 10
 
+README_EXCERPT_CHARS = 500
+TOP_LEVEL_LISTING_MAX = 20
+
+MARKER_NAMES = {
+    "package.json", "pyproject.toml", "setup.py", "cargo.toml", "go.mod",
+    "gemfile", "pom.xml", "build.gradle", "makefile", "cmakelists.txt",
+    "dockerfile", ".envrc", "requirements.txt", "composer.json",
+}
+MARKER_PREFIXES = ("readme", "license")
+
+VENDOR_DIR_NAMES = {
+    "node_modules", "venv", "site-packages", "dist", "build", "target",
+    "vendor", "__pycache__",
+}
+
+
+def _has_project_marker(target: pathlib.Path) -> bool:
+    if not _safe_is_dir(target):
+        return False
+    try:
+        entries = list(target.iterdir())
+    except (PermissionError, OSError):
+        return False
+    for entry in entries:
+        name = entry.name.lower()
+        if name in MARKER_NAMES or name.endswith(".sln"):
+            return True
+        if name.startswith(MARKER_PREFIXES):
+            return True
+    return False
+
+
+def _is_vendor_or_cache(target: pathlib.Path) -> bool:
+    try:
+        resolved = target.resolve()
+    except OSError:
+        resolved = target
+    return any(part.startswith(".") or part in VENDOR_DIR_NAMES
+               for part in resolved.parts)
+
+
+def _readme_excerpt(target: pathlib.Path) -> str | None:
+    if not _safe_is_dir(target):
+        return None
+    try:
+        entries = sorted(target.iterdir(), key=lambda p: p.name)
+    except (PermissionError, OSError):
+        return None
+    for entry in entries:
+        if entry.name.lower().startswith("readme"):
+            try:
+                if entry.is_file():
+                    return entry.read_text(errors="replace")[:README_EXCERPT_CHARS]
+            except OSError:
+                return None
+    return None
+
+
+def _top_level_listing(target: pathlib.Path) -> list[str]:
+    if not _safe_is_dir(target):
+        return []
+    try:
+        entries = [p.name for p in target.iterdir() if not p.name.startswith(".")]
+    except (PermissionError, OSError):
+        return []
+    return sorted(entries)[:TOP_LEVEL_LISTING_MAX]
+
 
 def _is_git_repo(path: pathlib.Path) -> bool:
     try:
@@ -130,6 +197,8 @@ def decide(target: pathlib.Path,
 
     subtree = _subtree_entries(str(target), log_entries)
     if not subtree:
+        if _has_project_marker(target) and not _is_vendor_or_cache(target):
+            return (ESCALATE, None)
         return (SILENT, None)
     if _fanout(str(target), subtree) >= FANOUT_THRESHOLD:
         return (SILENT, None)
@@ -170,12 +239,16 @@ def gather_context(target: pathlib.Path,
                          or e.get("arguments", {}).get("command", ""),
                          e.get("ts", "")) for e in recent]
 
-    return {
+    result = {
         "target_name": target.name,
         "self_commit": self_commit,
         "child_commits": child_commits,
         "recent_commands": recent_commands,
     }
+    if not self_commit and not child_commits and not recent_commands:
+        result["readme_excerpt"] = _readme_excerpt(target)
+        result["top_level_listing"] = _top_level_listing(target)
+    return result
 
 
 def build_prompt(context: dict) -> str:
@@ -201,6 +274,12 @@ def build_prompt(context: dict) -> str:
         parts.append("Recent commands run here:")
         for command, ts in context["recent_commands"]:
             parts.append(f"  - {command} ({ts})")
+    if context.get("readme_excerpt") or context.get("top_level_listing"):
+        parts.append("Directory contents:")
+        if context.get("readme_excerpt"):
+            parts.append(f"  README excerpt: {context['readme_excerpt']}")
+        if context.get("top_level_listing"):
+            parts.append(f"  Files here: {', '.join(context['top_level_listing'])}")
     return "\n".join(parts)
 
 
