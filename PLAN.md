@@ -163,3 +163,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 54 — Multi-line paste burst-join (ISSUE-054)
 
 - [x] Task 54.1 — paste_join.py module + __main__.py wiring (unify Repl main prompt + TerminalConfirmer behind one paste-aware input function)
+
+## Phase 56 — Directory-recap cold-start fallback (ISSUE-056)
+
+- [ ] Task 56.1 — marker-file content-sniff: gather_context()/build_prompt() README+listing fallback, decide()'s new escalation branch, vendor/cache exclusion ← current
