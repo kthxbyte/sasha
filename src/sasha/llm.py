@@ -45,6 +45,7 @@ class ChatClient:
         }
         if tools:
             payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
         llm_debug.log_request(profile=self.profile.name, model=self.profile.model,
                                messages=messages, tools=tools)
@@ -104,12 +105,13 @@ class ChatClient:
                                     "args_parts": []
                                 }
                             
-                            if "id" in tc_delta:
+                            if "id" in tc_delta and tc_delta["id"]:
                                 tool_call_fragments[index]["id"] = tc_delta["id"]
-                            if "function" in tc_delta and "name" in tc_delta["function"]:
-                                tool_call_fragments[index]["name"] = tc_delta["function"]["name"]
-                            if "function" in tc_delta and "arguments" in tc_delta["function"]:
-                                tool_call_fragments[index]["args_parts"].append(tc_delta["function"]["arguments"])
+                            if "function" in tc_delta:
+                                if "name" in tc_delta["function"] and tc_delta["function"]["name"]:
+                                    tool_call_fragments[index]["name"] = tc_delta["function"]["name"]
+                                if "arguments" in tc_delta["function"] and tc_delta["function"]["arguments"] is not None:
+                                    tool_call_fragments[index]["args_parts"].append(tc_delta["function"]["arguments"])
 
                 if not done_seen:
                     raise ChatError("Stream ended before [DONE] was received")
@@ -120,8 +122,8 @@ class ChatClient:
                     if not fragment["id"] or not fragment["name"]:
                         continue
                     
-                    args_str = "".join(fragment["args_parts"])
                     try:
+                        args_str = "".join(fragment["args_parts"])
                         args_dict = json.loads(args_str)
                         assembled_tool_calls.append(ToolCall(
                             id=fragment["id"],
