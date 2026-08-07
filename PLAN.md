@@ -170,5 +170,5 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 57 — `question` tool (ISSUE-059)
 
-- [ ] Task 57.1 — question.py module (schema, Questioner protocol, validate_shape, format_result) + tools.py REGISTRY entry + agent.py dedicated dispatch branch + questioner param + session.py system-prompt guidance ← current
-- [ ] Task 57.2 — TerminalQuestioner (repl.py) + __main__.py wiring (spec written once Task 57.1 ships, matching Phase 51's task-at-a-time precedent)
+- [x] Task 57.1 — question.py module (schema, Questioner protocol, validate_shape, format_result) + tools.py REGISTRY entry + agent.py dedicated dispatch branch + questioner param + session.py system-prompt guidance
+- [ ] Task 57.2 — TerminalQuestioner (repl.py) + __main__.py wiring (spec written once Task 57.1 ships, matching Phase 51's task-at-a-time precedent) ← current
