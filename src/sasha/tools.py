@@ -6,6 +6,7 @@ import re
 from typing import Callable
 
 from sasha import memory
+from sasha import question
 from sasha import safe_commands
 from sasha.executor import Executor
 
@@ -323,5 +324,15 @@ REGISTRY: dict[str, Tool] = {
         confirmation_summary=None,
         handler=_remember_handler,
         repetition_key=lambda args: args.get("note", ""),
+    ),
+    "question": Tool(
+        name="question",
+        schema=question.QUESTION_TOOL_SCHEMA,
+        requires_confirmation=False,
+        confirmation_summary=None,
+        handler=lambda args, executor: ToolResult(
+            "question tool must be handled via the dedicated agent-loop "
+            "branch, not Tool.handler — this indicates a dispatch bug."),
+        repetition_key=lambda args: args,
     ),
 }

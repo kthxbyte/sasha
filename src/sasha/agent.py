@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from typing import Callable, Protocol
+from sasha import question
 from sasha import safe_commands
 from sasha import tool_log
 from sasha.llm import ChatClient, ChatResponse
@@ -24,6 +27,7 @@ def run_consult(
     on_async_status: Callable[[str], None] | None = None,
     max_tool_turns: int = 10,
     on_phase: Callable[[str | None], None] = lambda phase: None,
+    questioner: question.Questioner | None = None,
 ) -> None:
     status = on_status if on_status is not None else out
     warn = on_warning if on_warning is not None else out
@@ -70,6 +74,33 @@ def run_consult(
             tool = REGISTRY.get(call.name)
             if tool is None:
                 session.add_tool_result(call.id, f"Unknown tool: {call.name}")
+                continue
+
+            if call.name == "question":
+                questions = question.validate_shape(call.arguments)
+                if questions is None:
+                    result_str = ("Malformed question payload — each entry in "
+                                   "`questions` must be an object with question/"
+                                   "header/options, not a plain string. Try again.")
+                    verdict = "malformed"
+                elif questioner is None:
+                    result_str = "question tool is not available in this session."
+                    verdict = "unavailable"
+                else:
+                    pairs = questioner.ask(questions)
+                    if pairs is None:
+                        result_str = "REJECTED: user dismissed the question(s)"
+                        verdict = "rejected"
+                    else:
+                        result_str = question.format_result(pairs)
+                        verdict = "answered"
+                session.add_tool_result(call.id, result_str)
+                tool_log.log_call(
+                    tool_name="question", call_id=call.id, arguments=call.arguments,
+                    executed_command=None, cwd=executor.cwd, verdict=verdict,
+                    executed=True, result_text=result_str, result_omitted_reason=None)
+                current_key = ("question", call.arguments)
+                current_action = ("question", call.arguments)
                 continue
 
             final_arguments = call.arguments
