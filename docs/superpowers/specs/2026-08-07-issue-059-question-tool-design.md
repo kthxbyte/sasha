@@ -210,8 +210,20 @@ if call.name == "question":
         executed_command=None, cwd=executor.cwd, verdict=verdict,
         executed=True, result_text=result_str, result_omitted_reason=None)
     current_key = ("question", call.arguments)
+    current_action = ("question", call.arguments)
     continue
 ```
+
+`current_action` must be set alongside `current_key` — found via worktree
+verification while transitioning to planning: the end-of-round
+repetition-guard block
+(`agent.py:146-165`) unpacks `current_action` when building its stop
+message (`name, args = current_action`), and it stays `None` if this
+branch only sets `current_key`, crashing with `TypeError: cannot unpack
+non-iterable NoneType object` the moment two identical `question` calls
+actually trip the guard. Mirrors the generic per-tool path's own `if
+executed: current_key = ...; current_action = (call.name,
+final_arguments)` (`agent.py:142-144`).
 
 The `questioner is None` branch exists purely so a misconfigured or
 future non-terminal caller of `run_consult()` degrades to a clear,
