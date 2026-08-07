@@ -167,11 +167,23 @@ vocabulary because a menu selection isn't a yes/no/edit/reply.
 
 ### 4.3 `agent.py` integration
 
-`run_consult()` gains a new `questioner: Questioner` parameter, alongside
-the existing `confirmer`. The per-call loop (`agent.py:69-144`) gains one
-new branch, inserted immediately after the existing unknown-tool check
-(`agent.py:70-73`), before `requires_confirmation`/`tool.handler` are ever
-consulted:
+`run_consult()` gains a new `questioner: Questioner | None = None` keyword
+parameter, alongside the existing `confirmer` — **defaulted**, matching
+every other parameter added to `run_consult()` since its original Task 2.3
+signature (`on_reasoning`, `on_status`, `on_warning`, `on_async_status`,
+`on_phase`, `max_tool_turns` — `agent.py:21-26` — all have defaults).
+This is a deliberate choice to avoid touching any of the ~9 existing
+contract test files whose own `_consult()` helpers call `run_consult()`
+directly (`test_task_2_3_agent.py`, `test_task_3_0_agent_hardening.py`,
+`test_task_16_2_agent_registry.py`, `test_task_21_1_*`, `test_task_22_1_*`,
+`test_task_22_2_*`, `test_task_26_1_*`, `test_task_30_1_*`,
+`test_task_31_1_*`) — none of them exercise `question` tool calls, so none
+of them need to change. Only Task 57.1's own new contract test file passes
+a real (stubbed) `Questioner`.
+
+The per-call loop (`agent.py:69-144`) gains one new branch, inserted
+immediately after the existing unknown-tool check (`agent.py:70-73`),
+before `requires_confirmation`/`tool.handler` are ever consulted:
 
 ```python
 if call.name == "question":
@@ -181,6 +193,9 @@ if call.name == "question":
                        "`questions` must be an object with question/"
                        "header/options, not a plain string. Try again.")
         verdict = "malformed"
+    elif questioner is None:
+        result_str = "question tool is not available in this session."
+        verdict = "unavailable"
     else:
         pairs = questioner.ask(questions)
         if pairs is None:
@@ -197,6 +212,12 @@ if call.name == "question":
     current_key = ("question", call.arguments)
     continue
 ```
+
+The `questioner is None` branch exists purely so a misconfigured or
+future non-terminal caller of `run_consult()` degrades to a clear,
+recoverable tool_result instead of an `AttributeError` — production
+`__main__.py` always passes a real `TerminalQuestioner`, so this branch
+is not expected to fire in practice.
 
 This bypasses `requires_confirmation`/`Tool.handler` entirely (§3.1) but
 still writes through `tool_log.log_call` and feeds `current_key` into the
@@ -348,6 +369,14 @@ Following the existing `TerminalConfirmer(lambda p: response, sink)` fake-
   **Rationale:** There's no sensible "no" for a menu selection stage —
   only "answer" or "give up." Matches the original proposal's stated
   behavior.
+- **Decision:** `questioner` is a defaulted (`None`) keyword parameter on
+  `run_consult()`, not a required positional one.
+  **Rationale:** Every parameter added to `run_consult()` incrementally
+  since Task 2.3 has followed this pattern specifically to avoid touching
+  every existing contract test file's `_consult()` helper. Discovered
+  while transitioning to planning: `run_consult()` already has ~9 existing
+  contract test call sites that would otherwise all need updating for a
+  parameter none of them use.
 - **Decision:** ISSUE-060 (local profile's broken tool-call streaming) and
   ISSUE-061 (missing Ctrl+C/EOF handling around the confirmation gate),
   both found while working this design, are logged separately and not
