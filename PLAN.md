@@ -166,4 +166,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 56 — Directory-recap cold-start fallback (ISSUE-056)
 
-- [ ] Task 56.1 — marker-file content-sniff: gather_context()/build_prompt() README+listing fallback, decide()'s new escalation branch, vendor/cache exclusion ← current
+- [x] Task 56.1 — marker-file content-sniff: gather_context()/build_prompt() README+listing fallback, decide()'s new escalation branch, vendor/cache exclusion
