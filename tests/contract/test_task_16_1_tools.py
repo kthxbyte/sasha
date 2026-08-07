@@ -64,6 +64,9 @@ def test_ac_permission_fixed_by_tool_type():
 # --- AC: exact schemas -------------------------------------------------------
 
 def test_ac_run_command_schema_exact():
+    # Amended by Tier 1 for the 2026-08-05 Qwen 3 (DashScope) streaming fix:
+    # every tool schema gained "additionalProperties": False for stricter
+    # provider-side validation.
     from sasha.tools import REGISTRY
     assert REGISTRY["run_command"].schema == {
         "type": "function",
@@ -83,6 +86,7 @@ def test_ac_run_command_schema_exact():
                         "description": "one line: what this does and why"},
                 },
                 "required": ["command", "description"],
+                "additionalProperties": False,
             },
         },
     }

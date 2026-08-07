@@ -189,6 +189,9 @@ def test_ac8_tool_schema_exact():
     # Amended by Tier 1 for Task 16.1 (multi-tool registry): RUN_COMMAND_TOOL
     # moves from sasha.agent into sasha.tools.REGISTRY["run_command"].schema.
     # See docs/superpowers/specs/task-16.1-tools-registry.md.
+    # Amended again for the 2026-08-05 Qwen 3 (DashScope) streaming fix:
+    # every tool schema gained "additionalProperties": False for stricter
+    # provider-side validation.
     from sasha.tools import REGISTRY
 
     assert REGISTRY["run_command"].schema == {
@@ -209,6 +212,7 @@ def test_ac8_tool_schema_exact():
                         "description": "one line: what this does and why"},
                 },
                 "required": ["command", "description"],
+                "additionalProperties": False,
             },
         },
     }
