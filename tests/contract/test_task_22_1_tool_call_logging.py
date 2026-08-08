@@ -292,7 +292,13 @@ def test_ac9_dispatch_withholds_sensitive_path_result_from_log_only(monkeypatch)
     assert tool_messages == ["exit code: 0\nstdout:\nOUT\nstderr:\n"]
 
 
-def test_ac10_unknown_tool_not_logged(monkeypatch):
+# Amended by Tier 1 for Task 59.1 (ISSUE-064): unknown-tool calls are now
+# deliberately logged (verdict="unknown_tool") as the durable signal for
+# missing stage-2 skill machinery — see
+# docs/superpowers/specs/task-59.1-skill-loading.md. Renamed from
+# test_ac10_unknown_tool_not_logged; the "not logged" behavior it pinned
+# is exactly what this task reverses.
+def test_ac10_unknown_tool_logged_as_unknown_tool_verdict(monkeypatch):
     calls = []
 
     def spy(**kwargs):
@@ -304,4 +310,12 @@ def test_ac10_unknown_tool_not_logged(monkeypatch):
                      {"kind": "text", "text": "done"}]) as stub:
         _consult(stub.base_url, confirmer, executor, spy, monkeypatch)
 
-    assert calls == []
+    assert len(calls) == 1
+    logged = calls[0]
+    assert logged["tool_name"] == "delete_everything"
+    assert logged["arguments"] == {"path": "/etc/passwd"}
+    assert logged["executed_command"] is None
+    assert logged["verdict"] == "unknown_tool"
+    assert logged["executed"] is False
+    assert logged["result_text"] is None
+    assert logged["result_omitted_reason"] is None

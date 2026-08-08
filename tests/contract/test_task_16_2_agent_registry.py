@@ -96,12 +96,14 @@ def test_ac_schema_sent_includes_all_five_tools():
     # docs/superpowers/specs/task-17.2-remember-tool.md.
     # Amended by Tier 1 for Task 57.1: a seventh tool, "question", is
     # added. See docs/superpowers/specs/task-57.1-question-core.md.
+    # Amended by Tier 1 for Task 59.1: an eighth tool, "use_skill", is
+    # added. See docs/superpowers/specs/task-59.1-skill-loading.md.
     with StubServer([{"kind": "text", "text": "hi"}]) as stub:
         _consult(stub.base_url, ScriptedConfirmer([]))
         sent_tools = stub.requests[0]["body"]["tools"]
     names = {t["function"]["name"] for t in sent_tools}
     assert names == {"run_command", "write_file", "read_file", "list_dir",
-                      "search_files", "remember", "question"}
+                      "search_files", "remember", "question", "use_skill"}
 
 
 # --- AC: dispatch by name for a new tool (auto-approved) ---------------------

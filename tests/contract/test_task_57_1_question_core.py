@@ -293,12 +293,14 @@ def test_ac11_answered_batch_matches_format_result():
 # --- AC12: schema sent to the LLM ----------------------------------------------
 
 def test_ac12_schema_sent_includes_question():
+    # Amended by Tier 1 for Task 59.1: an eighth tool, "use_skill", is
+    # added. See docs/superpowers/specs/task-59.1-skill-loading.md.
     with StubServer([{"kind": "text", "text": "hi"}]) as stub:
         _consult(stub.base_url, ScriptedConfirmer([]))
         sent_tools = stub.requests[0]["body"]["tools"]
     names = {t["function"]["name"] for t in sent_tools}
     assert names == {"run_command", "write_file", "read_file", "list_dir",
-                      "search_files", "remember", "question"}
+                      "search_files", "remember", "question", "use_skill"}
 
 
 # --- AC13: repetition guard -----------------------------------------------------
