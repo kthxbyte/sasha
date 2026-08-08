@@ -176,16 +176,26 @@ def run_consult(
 
         if response.tool_calls:
             tool_turns += 1
-            if ((current_key is not None and current_key == previous_key)
-                    or tool_turns >= max_tool_turns):
-                message = ("[sasha] stopping: repeated identical action / "
-                           "tool-turn limit reached")
-                if current_key is not None and current_key == previous_key:
+            repeated = current_key is not None and current_key == previous_key
+            exhausted = tool_turns >= max_tool_turns
+            if repeated or exhausted:
+                desc = None
+                if current_action is not None:
                     name, args = current_action
                     desc = f"{name}({args})"
                     if len(desc) > 200:
                         desc = desc[:200] + "\u2026"
-                    message += f" \u2014 {desc}"
+                if repeated:
+                    message = "[sasha] stopping: repeated identical action"
+                    if desc is not None:
+                        message += f" \u2014 {desc}"
+                else:
+                    message = (f"[sasha] stopping: hit the {max_tool_turns}-"
+                               f"action limit for this turn")
+                    if desc is not None:
+                        message += f" \u2014 last action: {desc}"
+                    message += (" \u2014 raise max_tool_turns under [limits] "
+                               "in config.toml if this looks like real progress")
                 warn(message)
                 session.add_user("Answer in text now; no further commands will be run.")
                 final_messages = session.build_messages(executor.cwd)
