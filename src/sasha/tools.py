@@ -8,6 +8,7 @@ from typing import Callable
 from sasha import memory
 from sasha import question
 from sasha import safe_commands
+from sasha import skills
 from sasha.executor import Executor
 
 _READ_FILE_MAX_CHARS = 40000
@@ -146,6 +147,14 @@ def _remember_handler(args: dict, executor: Executor) -> ToolResult:
     else:
         memory.encode_general_remember(note, executor.last_command, executor.last_result)
     return ToolResult(f"remembered: {note}")
+
+
+def _use_skill_handler(args: dict, executor: Executor) -> ToolResult:
+    name = args.get("name", "")
+    content = skills.load_skill(name, args.get("args", ""))
+    if content is None:
+        return ToolResult(f"no such skill: {name}")
+    return ToolResult(content)
 
 
 REGISTRY: dict[str, Tool] = {
@@ -333,6 +342,14 @@ REGISTRY: dict[str, Tool] = {
         handler=lambda args, executor: ToolResult(
             "question tool must be handled via the dedicated agent-loop "
             "branch, not Tool.handler — this indicates a dispatch bug."),
+        repetition_key=lambda args: args,
+    ),
+    "use_skill": Tool(
+        name="use_skill",
+        schema=skills.USE_SKILL_SCHEMA,
+        requires_confirmation=False,
+        confirmation_summary=None,
+        handler=_use_skill_handler,
         repetition_key=lambda args: args,
     ),
 }

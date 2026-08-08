@@ -29,9 +29,10 @@ class NoteCommand:
 
 class Session:
     def __init__(self, history_token_budget: int = 12000,
-                 personality: str = "") -> None:
+                 personality: str = "", skills_listing: str = "") -> None:
         self.history_token_budget = history_token_budget
         self._personality = personality
+        self._skills_listing = skills_listing
         self._general_memory_block: str = ""
         self._project_memory_block: str = ""
         self.history: list[dict[str, Any]] = []  # Store message dicts
@@ -73,6 +74,8 @@ class Session:
             parts.append(
                 f"What you remember about this project so far:\n"
                 f"{self._project_memory_block}")
+        if self._skills_listing:
+            parts.append(self._skills_listing)
         parts.append(functional)
         return "\n\n".join(parts)
 

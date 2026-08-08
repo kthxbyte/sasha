@@ -11,6 +11,7 @@ from sasha import paste_join
 from sasha import personality
 from sasha import llm_debug
 from sasha import prompt as prompt_mod
+from sasha import skills
 from sasha import tool_log
 from sasha.config import ConfigError, load
 from sasha.executor import Executor
@@ -84,9 +85,11 @@ def main(argv: list[str] | None = None) -> int:
     mutes = MuteStore(state_dir / "mutes.json", threshold=limits.mute_threshold)
 
     personality_result = personality.load_personality()
+    skills_listing = skills.build_skills_listing()
 
     session = Session(limits.history_tokens,
-                      personality=personality_result.text)
+                      personality=personality_result.text,
+                      skills_listing=skills_listing)
 
     client_factory = lambda p: ChatClient(p)
 

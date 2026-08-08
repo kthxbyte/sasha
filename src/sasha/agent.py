@@ -74,6 +74,10 @@ def run_consult(
             tool = REGISTRY.get(call.name)
             if tool is None:
                 session.add_tool_result(call.id, f"Unknown tool: {call.name}")
+                tool_log.log_call(
+                    tool_name=call.name, call_id=call.id, arguments=call.arguments,
+                    executed_command=None, cwd=executor.cwd, verdict="unknown_tool",
+                    executed=False, result_text=None, result_omitted_reason=None)
                 continue
 
             if call.name == "question":
