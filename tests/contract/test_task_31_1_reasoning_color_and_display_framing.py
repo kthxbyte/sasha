@@ -382,7 +382,14 @@ def test_ac5c_compaction_notice_uses_status_channel(monkeypatch):
 # AC6: stopping message enrichment
 # =============================================================================
 
-STOP_LINE = "[sasha] stopping: repeated identical action / tool-turn limit reached"
+# Amended by Tier 1 for Task 58.1: the conflated single stop message split
+# into two distinct messages by cause — the turn-limit variant now also
+# shows the last action (when one exists) and a config hint, rather than
+# staying bare. See docs/superpowers/specs/task-58.1-split-stop-messages.md.
+REPEATED_STOP_LINE = "[sasha] stopping: repeated identical action"
+LIMIT_STOP_LINE = "[sasha] stopping: hit the"
+LIMIT_HINT = (" — raise max_tool_turns under [limits] in config.toml if "
+             "this looks like real progress")
 
 
 def _unknown(call_id):
@@ -413,13 +420,13 @@ def test_ac6a_repeated_action_stop_includes_action_description(monkeypatch):
         run_consult(session, client, executor, confirmer, out=out_chunks.append,
                     max_tool_turns=10)
 
-    stop_msgs = [c for c in out_chunks if c.startswith(STOP_LINE)]
+    stop_msgs = [c for c in out_chunks if c.startswith(REPEATED_STOP_LINE)]
     assert len(stop_msgs) == 1
     msg = stop_msgs[0]
-    assert msg == STOP_LINE + " — list_dir({'path': '/x'})"
+    assert msg == REPEATED_STOP_LINE + " — list_dir({'path': '/x'})"
 
 
-def test_ac6b_turn_limit_only_stop_leaves_message_unchanged(monkeypatch):
+def test_ac6b_turn_limit_only_stop_has_no_action_desc_but_has_hint(monkeypatch):
     from sasha.agent import run_consult
     from sasha.config import Profile
     from sasha.llm import ChatClient
@@ -437,9 +444,12 @@ def test_ac6b_turn_limit_only_stop_leaves_message_unchanged(monkeypatch):
         run_consult(session, client, executor, confirmer, out=out_chunks.append,
                     max_tool_turns=2)
 
-    stop_msgs = [c for c in out_chunks if c.startswith(STOP_LINE)]
+    stop_msgs = [c for c in out_chunks if c.startswith(LIMIT_STOP_LINE)]
     assert len(stop_msgs) == 1
-    assert stop_msgs[0] == STOP_LINE
+    # No "last action:" fragment — the two _unknown() calls never execute,
+    # so current_action stays None — but the config hint is always present.
+    assert stop_msgs[0] == "[sasha] stopping: hit the 2-action limit for this turn" + LIMIT_HINT
+    assert "last action:" not in stop_msgs[0]
 
 
 def test_ac6c_action_description_truncated_at_200_chars(monkeypatch, tmp_path):
@@ -474,10 +484,10 @@ def test_ac6c_action_description_truncated_at_200_chars(monkeypatch, tmp_path):
         run_consult(session, client, executor, confirmer, out=out_chunks.append,
                     max_tool_turns=10)
 
-    stop_msgs = [c for c in out_chunks if c.startswith(STOP_LINE)]
+    stop_msgs = [c for c in out_chunks if c.startswith(REPEATED_STOP_LINE)]
     assert len(stop_msgs) == 1
     msg = stop_msgs[0]
-    prefix = STOP_LINE + " — "
+    prefix = REPEATED_STOP_LINE + " — "
     assert msg.startswith(prefix)
     desc = msg[len(prefix):]
     assert desc.endswith("…")

@@ -172,3 +172,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 - [x] Task 57.1 — question.py module (schema, Questioner protocol, validate_shape, format_result) + tools.py REGISTRY entry + agent.py dedicated dispatch branch + questioner param + session.py system-prompt guidance
 - [x] Task 57.2 — TerminalQuestioner (repl.py) + __main__.py wiring (spec written once Task 57.1 ships, matching Phase 51's task-at-a-time precedent)
+
+## Phase 58 — Split repeated-action vs tool-turn-limit stop messages (ISSUE-063)
+
+- [ ] Task 58.1 — agent.py: split the conflated stop message into two cause-specific messages, turn-limit variant shows last action + config hint ← current

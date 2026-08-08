@@ -16,7 +16,11 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from sse_stub import StubServer  # noqa: E402
 
-STOP_LINE = "[sasha] stopping: repeated identical action / tool-turn limit reached"
+# Amended by Tier 1 for Task 58.1: this file only ever exercises the
+# repetition stop (never turn-limit), so its one STOP_LINE constant
+# becomes REPEATED_STOP_LINE. See
+# docs/superpowers/specs/task-58.1-split-stop-messages.md.
+REPEATED_STOP_LINE = "[sasha] stopping: repeated identical action"
 
 
 class SpyExecutor:
@@ -314,7 +318,7 @@ def test_ac13_repetition_guard_fires_on_identical_question_calls():
         assert len(stub.requests) == 3
         last_body = stub.requests[2]["body"]
     assert not last_body.get("tools")
-    assert STOP_LINE in out
+    assert REPEATED_STOP_LINE in out
     assert "final answer" in out
 
 

@@ -18,7 +18,11 @@ from sse_stub import StubServer, refused_base_url  # noqa: E402
 # stop-loop guard generalizes from a raw command-string comparison to a
 # (tool_name, key) comparison, so "command" -> "action" in the wording.
 # See docs/superpowers/specs/task-16.2-agent-dispatch.md.
-STOP_LINE = "[sasha] stopping: repeated identical action / tool-turn limit reached"
+# Amended by Tier 1 for Task 58.1: the conflated single stop message split
+# into two distinct messages by cause. See
+# docs/superpowers/specs/task-58.1-split-stop-messages.md.
+REPEATED_STOP_LINE = "[sasha] stopping: repeated identical action"
+LIMIT_STOP_LINE = "[sasha] stopping: hit the"
 
 
 class SpyExecutor:
@@ -164,7 +168,7 @@ def test_ac6_identical_command_stops_loop():
         last_body = stub.requests[2]["body"]
     assert executor.calls == [("ls", True), ("ls", True)]
     assert not last_body.get("tools")        # final round is tools-less
-    assert STOP_LINE in out
+    assert REPEATED_STOP_LINE in out
     assert "final answer" in out
 
 
@@ -179,7 +183,7 @@ def test_ac7_turn_limit_stops_loop():
         last_body = stub.requests[2]["body"]
     assert executor.calls == [("cmd-a", True), ("cmd-b", True)]
     assert not last_body.get("tools")
-    assert STOP_LINE in out
+    assert LIMIT_STOP_LINE in out
     assert "wrap-up" in out
 
 

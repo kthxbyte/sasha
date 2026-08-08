@@ -17,7 +17,10 @@ from sse_stub import StubServer  # noqa: E402
 # stop-loop guard generalizes from a raw command-string comparison to a
 # (tool_name, key) comparison, so "command" -> "action" in the wording.
 # See docs/superpowers/specs/task-16.2-agent-dispatch.md.
-STOP_LINE = "[sasha] stopping: repeated identical action / tool-turn limit reached"
+# Amended by Tier 1 for Task 58.1: this file only ever exercises the
+# turn-limit stop (never repetition), so its one STOP_LINE constant becomes
+# LIMIT_STOP_LINE. See docs/superpowers/specs/task-58.1-split-stop-messages.md.
+LIMIT_STOP_LINE = "[sasha] stopping: hit the"
 
 
 @pytest.fixture(autouse=True)
@@ -88,7 +91,7 @@ def test_ac1_unknown_tool_turns_hit_limit():
         last_body = stub.requests[2]["body"]
     assert executor.calls == []
     assert not last_body.get("tools")      # final round is tools-less
-    assert STOP_LINE in out
+    assert LIMIT_STOP_LINE in out
     assert "final words" in out
 
 
