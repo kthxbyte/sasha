@@ -179,4 +179,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 59 — Sasha skill loading, stage 1 load-only (ISSUE-064)
 
-- [ ] Task 59.1 — skills.py module (frontmatter parsing, discovery, listing, load_skill) + tools.py REGISTRY entry + agent.py unknown-tool logging + session.py skills_listing param + __main__.py wiring ← current
+- [x] Task 59.1 — skills.py module (frontmatter parsing, discovery, listing, load_skill) + tools.py REGISTRY entry + agent.py unknown-tool logging + session.py skills_listing param + __main__.py wiring
