@@ -54,7 +54,8 @@ def _boot_api_line(profile):
 
 class Repl:
     def __init__(self, config, executor, mutes, session, client_factory,
-                 confirmer, input_fn, sink, getpass_fn=getpass.getpass):
+                 confirmer, input_fn, sink, getpass_fn=getpass.getpass,
+                 questioner=None):
         self._config = config
         self._executor = executor
         self._mutes = mutes
@@ -64,6 +65,7 @@ class Repl:
         self._input_fn = input_fn
         self._sink = sink
         self._getpass_fn = getpass_fn
+        self._questioner = questioner
         self._current_profile = config.profiles[config.default_profile]
         self._activity = ActivityIndicator(
             colors={"thinking": config.activity_indicator_thinking_color,
@@ -114,8 +116,9 @@ class Repl:
                         on_status=self._sink.write_line,
                         on_warning=_on_warning,
                         on_async_status=on_async_status,
-                        max_tool_turns=self._config.limits.max_tool_turns,
-                        on_phase=self._on_activity_phase)
+                         max_tool_turns=self._config.limits.max_tool_turns,
+                         on_phase=self._on_activity_phase,
+                         questioner=self._questioner)
         except ChatError as e:
             self._sink.write_line(
                 f"[sasha] {self._current_profile.name} unreachable: "
@@ -648,6 +651,76 @@ class TerminalConfirmer:
             return ("edit", edited)
         else:
             return ("reply", response)
+
+
+class TerminalQuestioner:
+    def __init__(self, input_fn, sink):
+        self._input_fn = input_fn
+        self._sink = sink
+
+    def ask(self, questions):
+        all_pairs = []
+        n = len(questions)
+        try:
+            for i, q in enumerate(questions, start=1):
+                pairs = self._ask_one(i, n, q)
+                if pairs is None:
+                    return None
+                all_pairs.extend(pairs)
+        except (KeyboardInterrupt, EOFError):
+            return None
+        return all_pairs
+
+    def _wrap(self, text, color):
+        if self._sink.color_enabled:
+            return f"{color}{text}{_RESET}"
+        return text
+
+    def _ask_one(self, i, n, q):
+        header = q["header"]
+        options = q["options"]
+        multiple = q["multiple"]
+        lines = [self._wrap(f"Question {i}/{n}: {header}", _COMMAND_COLOR),
+                 "", f"  {q['question']}", ""]
+        for idx, opt in enumerate(options, start=1):
+            lines.append(f"  [{idx}] {opt['label']} — {opt['description']}")
+        lines.append("")
+        lines.append(self._wrap("  [C] Type your own answer", _DIM))
+        lines.append("")
+        if multiple:
+            choice_line = (f"  Your choice(s) [1-{len(options)}, "
+                            f"comma-separated, C]:")
+        else:
+            choice_line = f"  Your choice [1-{len(options)}, C]:"
+        lines.append(self._wrap(choice_line, _PROMPT_COLOR))
+        self._sink.write_line("\n".join(lines))
+
+        while True:
+            response = self._input_fn("> ").strip()
+            if response == "":
+                return None
+            if response.upper() == "C":
+                custom = self._input_fn("custom> ")
+                return [(header, f"{header}: {custom}")]
+            tokens = [t.strip() for t in response.split(",")]
+            if not multiple and len(tokens) != 1:
+                self._sink.write_line("  Invalid choice — try again.")
+                continue
+            indices = []
+            valid = True
+            for t in tokens:
+                if not t.isdigit() or not (1 <= int(t) <= len(options)):
+                    valid = False
+                    break
+                idx = int(t)
+                if idx in indices:
+                    valid = False
+                    break
+                indices.append(idx)
+            if not valid:
+                self._sink.write_line("  Invalid choice — try again.")
+                continue
+            return [(header, options[idx - 1]["label"]) for idx in indices]
 
 
 _SASHA_COLOR = "\x1b[1;36m"   # bold cyan

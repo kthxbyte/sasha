@@ -16,7 +16,7 @@ from sasha.config import ConfigError, load
 from sasha.executor import Executor
 from sasha.llm import ChatClient
 from sasha.mutes import MuteStore
-from sasha.repl import Repl, TerminalConfirmer, TerminalSink
+from sasha.repl import Repl, TerminalConfirmer, TerminalQuestioner, TerminalSink
 from sasha.session import Session
 
 _PASTE_GRACE_S = 0.01
@@ -100,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         sink.write_line(config.notice)
 
     confirmer = TerminalConfirmer(_joined_input, sink)
+    questioner = TerminalQuestioner(_joined_input, sink)
 
     _isatty = sys.stdin.isatty()
 
@@ -119,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         input_fn=_repl_input,
         sink=sink,
         getpass_fn=getpass.getpass,
+        questioner=questioner,
     )
 
     if profile_name != config.default_profile:
