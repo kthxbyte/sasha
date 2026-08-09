@@ -180,3 +180,7 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 ## Phase 59 — Sasha skill loading, stage 1 load-only (ISSUE-064)
 
 - [x] Task 59.1 — skills.py module (frontmatter parsing, discovery, listing, load_skill) + tools.py REGISTRY entry + agent.py unknown-tool logging + session.py skills_listing param + __main__.py wiring
+
+## Phase 60 — bash-completion default-delegation fallback (ISSUE-058)
+
+- [ ] Task 60.1 — completion.py: complete_via_bash() intercepts compopt -o default/-o bashdefault and falls back to complete_filenames() ← current
