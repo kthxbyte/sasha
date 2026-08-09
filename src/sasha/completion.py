@@ -5,6 +5,8 @@ import shlex
 import shutil
 import subprocess
 
+_DEFAULT_COMPLETION_SENTINEL = "__SASHA_DEFAULT_COMPLETION__"
+
 _VERBS = ["help", "mute", "profile", "unmute"]
 
 
@@ -56,6 +58,17 @@ def complete_via_bash(words: list[str], cword: int, timeout_s: float = 0.5,
     script = (
         "source /usr/share/bash-completion/bash_completion 2>/dev/null\n"
         f"_completion_loader {shlex.quote(words[0])} 2>/dev/null\n"
+        "_sasha_default_requested=0\n"
+        "compopt() {\n"
+        "  local prev=\"\"\n"
+        "  for a in \"$@\"; do\n"
+        "    if [ \"$prev\" = \"-o\" ] && "
+        "{ [ \"$a\" = \"default\" ] || [ \"$a\" = \"bashdefault\" ]; }; then\n"
+        "      _sasha_default_requested=1\n"
+        "    fi\n"
+        "    prev=\"$a\"\n"
+        "  done\n"
+        "}\n"
         f"COMP_LINE={shlex.quote(comp_line)}\n"
         "COMP_POINT=${#COMP_LINE}\n"
         f"COMP_WORDS={comp_words_bash}\n"
@@ -63,6 +76,9 @@ def complete_via_bash(words: list[str], cword: int, timeout_s: float = 0.5,
         f'func=$(complete -p {shlex.quote(words[0])} 2>/dev/null | '
         r'sed -n "s/.*-F \([^ ]*\).*/\1/p")' "\n"
         '[ -n "$func" ] && "$func"\n'
+        'if [ "${#COMPREPLY[@]}" -eq 0 ] && [ "$_sasha_default_requested" = "1" ]; then\n'
+        f'  echo "{_DEFAULT_COMPLETION_SENTINEL}"\n'
+        'fi\n'
         'printf "%s\\n" "${COMPREPLY[@]}"\n'
     )
     try:
@@ -70,7 +86,10 @@ def complete_via_bash(words: list[str], cword: int, timeout_s: float = 0.5,
                            text=True, timeout=timeout_s, cwd=cwd)
     except (subprocess.TimeoutExpired, OSError):
         return []
-    return [line.rstrip() for line in r.stdout.splitlines() if line.rstrip()]
+    lines = [line.rstrip() for line in r.stdout.splitlines() if line.rstrip()]
+    if lines and lines[0] == _DEFAULT_COMPLETION_SENTINEL:
+        return complete_filenames(words[cword] if cword < len(words) else "", cwd=cwd)
+    return lines
 
 
 def bash_completion_available() -> bool:
