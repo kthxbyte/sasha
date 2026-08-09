@@ -187,4 +187,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 61 — YAML block-scalar frontmatter parsing (ISSUE-065)
 
-- [ ] Task 61.1 — skills.py: _parse_frontmatter() handles YAML block scalars (>/|/>-/>+/|-/|+) so real-world SKILL.md descriptions parse correctly ← current
+- [x] Task 61.1 — skills.py: _parse_frontmatter() handles YAML block scalars (>/|/>-/>+/|-/|+) so real-world SKILL.md descriptions parse correctly
