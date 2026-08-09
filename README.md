@@ -70,7 +70,7 @@ Other flags: `--config <path>` to use a config file somewhere other than
 ## Configuration
 
 Sasha reads `~/.config/sasha/config.toml`. On first run, if the file doesn't
-exist, Sasha writes one for you (and says so, once) with four profiles:
+exist, Sasha writes one for you (and says so, once):
 
 ```toml
 default_profile = "llm7"
@@ -99,7 +99,41 @@ base_url = "http://192.168.8.253:11441/v1"
 model = "local"
 api_key = ""
 api_key_required = false
+
+[safe_commands]
+sensitive_paths = [
+  "~/.ssh/**", "/etc/passwd", "/etc/shadow*", "/etc/sudoers*",
+  "~/.aws/**", "~/.gnupg/**", "~/.kube/**", "~/.config/gcloud/**",
+  "~/.docker/config.json", "~/.netrc", "~/.pgpass",
+  "~/.git-credentials", "~/.npmrc", "**/.env", "**/.env.*",
+]
+
+[tool_log]
+max_size_mb = 100
+
+[activity_indicator]
+enabled = true
+interval_s = 0.05
+thinking_color = "#C084FC"
+tool_color = "#FFD700"
+
+[llm_debug]
+enabled = false
+
+[directory_recap]
+enabled = true
 ```
+
+- `[safe_commands] sensitive_paths` — glob patterns that keep a command
+  out of `run_command`'s safe-auto-approval, even if built entirely from
+  allowlisted verbs — see Tools below.
+- `[tool_log] max_size_mb` — see State below.
+- `[activity_indicator]` — the terminal cursor animation shown while the
+  LLM is thinking or a tool is running; `enabled = false` turns it off.
+- `[llm_debug] enabled` — raw request/response logging for
+  troubleshooting; see State below.
+- `[directory_recap] enabled` — the passive on-`cd` check; same as
+  `sasha directory-recap on|off` — see Directory recap below.
 
 `[limits]` isn't written by the self-installed file — it falls back to
 built-in defaults (`history_tokens = 12000`, `stderr_capture_bytes = 8192`,
@@ -201,25 +235,57 @@ other purpose — the user wasn't running a real command, so spending tokens is
 appropriate. All other failures are zero-token offers: the user decides whether
 to consult.
 
+### Directory recap
+
+The first time you `cd` into a given directory in a session (on, and only
+on, an explicit `cd` — not every prompt), Sasha decides whether a one-line
+orientation is worth showing, entirely passively:
+
+- **Nothing** for directories with no relevant history, huge "umbrella"
+  directories with many child git repos underneath, directories with a
+  lot of unrelated activity spread across many subpaths, or activity
+  that's gone stale.
+- **A single free line**, no LLM call, when the directory's own last git
+  commit is enough: `[sasha] sasha: last commit 2h ago — "Track Task 61.1"`.
+- **A short background LLM summary** otherwise (recent commands run there,
+  or a project marker file with no prior activity yet) — doesn't block the
+  shell; prints when it finishes.
+
+`sasha recap` triggers the same summary explicitly, synchronously, always
+via the LLM, regardless of what the passive check would have decided.
+`sasha directory-recap on|off` toggles the passive behavior in
+`config.toml` (on by default); the explicit `sasha recap` command always
+works regardless of the toggle.
+
 ### Tools available to the LLM
 
-The LLM can call six tools, each with a permission fixed by its type — not
-configurable, not per-call:
+The LLM can call eight tools:
 
 | Tool | Confirmation | Purpose |
 |---|---|---|
-| `run_command` | Confirms | Propose one bash command to run in your shell. |
+| `run_command` | Confirms, *unless recognized as safe* | Propose one bash command to run in your shell. |
 | `write_file` | Confirms | Write content to a file (creates parent directories; overwrites if it exists). Not sandboxed — same unrestricted-but-confirmed model as `run_command`. |
 | `read_file` | Auto-runs | Read a file's contents. Sandboxed to the current directory and below. |
 | `list_dir` | Auto-runs | List a directory's entries. Sandboxed to the current directory and below. |
 | `search_files` | Auto-runs | Regex search over file contents, recursively. Sandboxed to the current directory and below. |
 | `remember` | Auto-runs | Save a durable note for future sessions — the current project's memory if you're in a git-tracked directory, general memory otherwise. See Memory below. |
+| `question` | Auto-runs (its own UI, not the confirmation gate) | Ask you one or more structured, menu-driven questions instead of guessing between materially different approaches. See Questions below. |
+| `use_skill` | Auto-runs | Load a named skill's full instructions into context. See Skills below. |
 
 `read_file`, `list_dir`, and `search_files` run immediately with no prompt —
 a path that resolves outside the current directory is rejected with an error
 message the LLM can see and correct, never a silent no-op. All three cap
 their output (40000 characters for `read_file`, 200 entries for `list_dir`,
 100 matches for `search_files`) and note when they've truncated.
+
+`run_command` normally goes through the confirmation gate below, but a
+narrow allowlist of read-only verbs (`ls`, `pwd`, `wc`, `cat`, `head`,
+`tail`, `file`, `stat`, `du`, `find`, `grep`, `tree`, `sort`, `uniq`,
+`cut`, `diff`, `echo`) auto-runs without asking — only when the *entire*
+command is built from those verbs (chained with `&&`/`;`/`|`/`||`), has no
+backticks/`$()`/`>` redirection/`$VAR` expansion, and touches no path
+matching your configured `sensitive_paths` patterns. Anything else about
+the command routes it back through the normal confirmation gate.
 
 ### Memory
 
@@ -313,10 +379,50 @@ the *current project's* memory only; general memory isn't touched by it,
 by design) are built-in commands — see Built-in commands under Muting
 below.
 
+### Skills
+
+Sasha can load named "skills" — packaged markdown playbooks describing a
+structured procedure — into context on request, the same concept
+Anthropic's own Claude Code uses via `SKILL.md` files. No installer is
+built in; populate `~/.config/sasha/skills/` yourself, laid out the same
+way Claude Code's own plugin cache is:
+
+```
+~/.config/sasha/skills/
+  <marketplace>/
+    <plugin>/
+      <version>/          ← highest semver wins if more than one is present
+        skills/
+          <skill-name>/
+            SKILL.md       ← frontmatter (name:, description:) + body
+```
+
+A repo whose own layout already matches this shape can be `git clone`d
+straight into place; most published skill repos don't nest this deeply
+though (a `skills/<name>/SKILL.md` directory at the repo root is a
+common shape instead), so the usual path is cloning it somewhere
+scratch and copying (or symlinking) its actual `skills/` directory in
+under a `<marketplace>/<plugin>/<version>/` you choose, e.g.:
+
+```
+git clone https://github.com/<owner>/<repo> /tmp/<repo>
+mkdir -p ~/.config/sasha/skills/<marketplace>/<plugin>/<version>
+cp -r /tmp/<repo>/skills ~/.config/sasha/skills/<marketplace>/<plugin>/<version>/skills
+```
+
+Every installed skill with both a `name:` and `description:` in its
+frontmatter (single-line or YAML block-scalar `>`/`|` style, both parse
+correctly) is listed for the LLM at startup; it decides on its own when a
+listed skill's description matches the task at hand, and loads the full
+file via the `use_skill` tool. Skills referencing machinery Sasha doesn't
+have (subagent dispatch, published artifacts, and similar) simply won't
+have those instructions fulfilled — the plain prose parts still work.
+
 ### Confirmation gate (safety guarantees)
 
-When the LLM proposes a mutating action (`run_command` or `write_file`),
-Sasha never executes it automatically. You see a confirmation block:
+When the LLM proposes `write_file`, or a `run_command` that isn't
+recognized as safe (see Tools above), Sasha never executes it
+automatically. You see a confirmation block:
 
 ```
 [sasha] wants to run:  <command or action summary>
@@ -334,8 +440,34 @@ Sasha never executes it automatically. You see a confirmation block:
   model may respond with more text or another proposal.
 
 If the model doesn't provide a description, `(no description provided)` is
-shown. The gate always applies — no mutating action proposed by the LLM ever
-runs without your explicit confirmation.
+shown. Anything that isn't a narrow, read-only, auto-approved `run_command`
+always goes through this gate — nothing else the LLM proposes ever runs
+without your explicit confirmation.
+
+### Questions
+
+The LLM can also pause and ask you directly, via the `question` tool,
+instead of guessing between materially different approaches:
+
+```
+Question 1/1: Cache strategy
+
+  What approach should I take for the caching layer?
+
+  [1] In-memory — Fastest, lost on restart.
+  [2] File-based — Persists across runs.
+
+  [C] Type your own answer
+
+  Your choice [1-2, C]:
+```
+
+Pick a number (or comma-separated numbers if the question allows multiple
+answers), press `C` to type a free-text answer instead, or press Ctrl-C /
+Enter with nothing typed to decline answering. This is a separate UI from
+the `y`/`n`/`e` confirmation gate above — no action is proposed here, just
+a question — and can chain into a multi-question batch (`Question 2/2`,
+etc.) before control returns to the model.
 
 ### Muting
 
@@ -362,6 +494,14 @@ From then on, that command failing with that exit code produces no offer.
 - `sasha forget` — permanently delete the current project's remembered
   memory only (general memory is untouched). Asks for confirmation
   first; nothing is deleted on any answer other than `yes`.
+- `sasha recap` — explicit, synchronous, always-via-LLM directory recap
+  for the current directory — see Directory recap above.
+- `sasha directory-recap on|off` — toggle the *passive* on-`cd` recap
+  check (on by default) — see Directory recap above.
+- `sasha compact-log` — manually strip stored results out of
+  `tool_log.jsonl` entries; the same compaction also runs automatically
+  in the background once the file passes `tool_log_max_size_mb` (100 MB
+  by default) — see State below.
 - `sasha help` — show available built-ins.
 
 Mute state is saved to `~/.local/state/sasha/mutes.json` and persists across
@@ -403,17 +543,24 @@ command execution.
 
 ### Loop detection
 
-If the agent's most recently executed tool call is identical to the previous
-turn's (same tool, same key arguments — e.g. the same command, or the same
-`write_file` path and content) or the loop reaches the maximum tool-turn
-limit (10 by default), Sasha stops the loop:
+Sasha stops the agent loop for two distinct reasons, worded differently so
+you can tell them apart at a glance:
 
-```
-[sasha] stopping: repeated identical action / tool-turn limit reached
-```
+- **Repetition** — the most recently executed tool call is identical to the
+  previous turn's (same tool, same key arguments — e.g. the same command,
+  or the same `write_file` path and content):
+  ```
+  [sasha] stopping: repeated identical action — <action>
+  ```
+- **Turn-limit exhaustion** — the loop reaches the maximum tool-turn limit
+  for one consult (10 by default; raise it with `max_tool_turns` under
+  `[limits]` in `config.toml`):
+  ```
+  [sasha] stopping: hit the 10-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress
+  ```
 
-The agent does one final text-only call so the LLM can answer or explain
-without proposing further commands.
+Either way, the agent does one final text-only call so the LLM can answer
+or explain without proposing further commands.
 
 ## Error vocabulary (reference)
 
@@ -425,11 +572,14 @@ Command output is never prefixed or altered.
 | Offer | `[sasha] failed (exit N) — press Enter to ask` |
 | Auto-mute | `[sasha] muting offers for <cmd> exit <N> — 'sasha unmute <cmd>' to restore` |
 | LLM unreachable | `[sasha] <profile> unreachable: <reason> — 'sasha profile <name>' to switch` |
-| Loop stopped | `[sasha] stopping: repeated identical action / tool-turn limit reached` |
+| Loop stopped (repetition) | `[sasha] stopping: repeated identical action — <action>` |
+| Loop stopped (turn limit) | `[sasha] stopping: hit the N-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress` |
 | Profile switch | `[sasha] profile: <name> (<model> @ <base_url>)` |
 | Ctrl+Z | `[sasha] Ctrl+Z not supported — command terminated` |
 | Project switch | `[sasha] project: <name> (<N> memories, last: "<gist>")` |
 | Memory created | `[sasha] created .sasha/memory/ — remembering context for this project from now on (gitignored automatically)` |
+| Directory recap (direct) | `[sasha] <dir>: last commit <age> — "<subject>"` |
+| Log compacted | `[sasha] tool_log.jsonl compacted: <before> MB → <after> MB` |
 | Bad config | `sasha: config error: <message>` (startup, exit 2) |
 
 ## State
@@ -438,14 +588,23 @@ Sasha writes its state to `~/.local/state/sasha/`:
 
 - `mutes.json` — mute counters (atomic write, survives corruption)
 - `history` — readline command history (1000-entry cap)
+- `tool_log.jsonl` — an append-only record of every tool call (name,
+  arguments, verdict, and result unless it touched a sensitive path),
+  auto-compacted (stored results stripped) once it passes
+  `tool_log_max_size_mb` (100 MB by default) — see `sasha compact-log`
+  above.
+- `llm_debug.jsonl` — raw LLM request/response logging, off by default
+  (`[llm_debug] enabled = true` in `config.toml` to turn it on) —
+  investigation tooling, not needed for normal use.
 
-Config, personality, and general memory live separately, under
+Config, personality, general memory, and skills live separately, under
 `~/.config/sasha/`:
 
 - `config.toml` — profiles, limits, prompt template (see Configuration)
 - `PERSONALITY.md` — tone/character customization (see Personality)
 - `memory/semantic.jsonl` — general (cross-project) remembered notes
 - `memory/episodic/*.log` — general memory's verbatim command records
+- `skills/` — installed skill libraries (see Skills above)
 
 Project memory lives with the project itself, not under your home
 directory's state/config folders — see Memory above:

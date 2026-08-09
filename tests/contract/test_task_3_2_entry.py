@@ -45,10 +45,12 @@ def test_ac1_version(env_home):
     # Amended by Tier 1 (2026-07-18): version bumped to 0.3.0 to mark the
     # Phase 17-19 milestone (project memory, general memory + crash
     # trigger, memory bootstrap + busy-star indicator).
+    # Amended by Tier 1 (2026-08-08): version bumped to 0.5.0 for the
+    # v0.5.0 tag (Phases 51-61).
     home, env = env_home
     r = _run(env, ["--version"])
     assert r.returncode == 0
-    assert r.stdout.strip() == "sasha 0.3.0"
+    assert r.stdout.strip() == "sasha 0.5.0"
 
 
 # --- AC2 -----------------------------------------------------------------------
