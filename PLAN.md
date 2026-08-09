@@ -183,4 +183,4 @@ Tracker parsed by `scripts/run-phase.sh`. Detailed plan:
 
 ## Phase 60 — bash-completion default-delegation fallback (ISSUE-058)
 
-- [ ] Task 60.1 — completion.py: complete_via_bash() intercepts compopt -o default/-o bashdefault and falls back to complete_filenames() ← current
+- [x] Task 60.1 — completion.py: complete_via_bash() intercepts compopt -o default/-o bashdefault and falls back to complete_filenames()
