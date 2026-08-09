@@ -33,20 +33,69 @@ def _skills_root() -> pathlib.Path:
     return pathlib.Path.home() / ".config" / "sasha" / "skills"
 
 
+_BLOCK_SCALAR_INDICATORS = (">", ">-", ">+", "|", "|-", "|+")
+
+
+def _consume_block_scalar(lines: list[str], start: int) -> tuple[list[str], int]:
+    body: list[str] = []
+    indent: int | None = None
+    i = start
+    while i < len(lines):
+        raw = lines[i]
+        if raw.strip() == "---":
+            break
+        if raw.strip() == "":
+            body.append("")
+            i += 1
+            continue
+        this_indent = len(raw) - len(raw.lstrip(" "))
+        if indent is None:
+            indent = this_indent
+        if this_indent < indent:
+            break
+        body.append(raw[indent:])
+        i += 1
+    return body, i
+
+
 def _parse_frontmatter(text: str) -> dict | None:
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return None
     result: dict[str, str] = {}
     closed = False
-    for line in lines[1:]:
+    i = 1
+    while i < len(lines):
+        line = lines[i]
         if line.strip() == "---":
             closed = True
             break
         if ":" not in line:
+            i += 1
             continue
         key, _, value = line.partition(":")
-        result[key.strip()] = value.strip()
+        key = key.strip()
+        value = value.strip()
+        if value in _BLOCK_SCALAR_INDICATORS:
+            body, i = _consume_block_scalar(lines, i + 1)
+            if value[0] == ">":
+                paragraphs: list[str] = []
+                current: list[str] = []
+                for body_line in body:
+                    if body_line == "":
+                        if current:
+                            paragraphs.append(" ".join(current))
+                            current = []
+                    else:
+                        current.append(body_line)
+                if current:
+                    paragraphs.append(" ".join(current))
+                value = "\n".join(paragraphs).strip()
+            else:
+                value = "\n".join(body).strip()
+        else:
+            i += 1
+        result[key] = value
     if not closed:
         return None
     return result
