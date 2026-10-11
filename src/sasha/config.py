@@ -134,6 +134,16 @@ model = "local"
 api_key = ""
 api_key_required = false
 
+# Written out explicitly rather than left to the built-in defaults, because
+# an undiscoverable knob is the same as no knob: max_tool_turns in particular
+# is the answer to 'why did it stop mid-task?', and it used to be invisible
+# unless you already knew the key existed (ISSUE-052/ISSUE-063).
+[limits]
+history_tokens = 12000
+stderr_capture_bytes = 8192
+max_tool_turns = 10
+mute_threshold = 3
+
 [safe_commands]
 sensitive_paths = [
   "~/.ssh/**", "/etc/passwd", "/etc/shadow*", "/etc/sudoers*",

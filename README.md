@@ -100,6 +100,12 @@ model = "local"
 api_key = ""
 api_key_required = false
 
+[limits]
+history_tokens = 12000
+stderr_capture_bytes = 8192
+max_tool_turns = 10
+mute_threshold = 3
+
 [safe_commands]
 sensitive_paths = [
   "~/.ssh/**", "/etc/passwd", "/etc/shadow*", "/etc/sudoers*",
@@ -135,10 +141,11 @@ enabled = true
 - `[directory_recap] enabled` — the passive on-`cd` check; same as
   `sasha directory-recap on|off` — see Directory recap below.
 
-`[limits]` isn't written by the self-installed file — it falls back to
-built-in defaults (`history_tokens = 12000`, `stderr_capture_bytes = 8192`,
-`max_tool_turns = 10`, `mute_threshold = 3`) unless you add the table
-yourself.
+`[limits]` is written by the self-installed file with the built-in defaults
+shown in the example above; drop the keys you don't need, or delete the whole
+table to fall back to the same defaults. `max_tool_turns` (10 by default) is
+the ceiling on tool calls in one consult — raise it if Sasha stops mid-task
+with `[sasha] stopping: hit the 10-action limit`.
 
 Four profiles are configured by default:
 

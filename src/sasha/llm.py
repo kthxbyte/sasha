@@ -2,12 +2,31 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import threading
 import urllib.request
 import urllib.error
 from typing import Callable, Any
 
 from sasha.config import Profile
 from sasha import llm_debug
+
+# One in-flight request at a time, process-wide.
+#
+# Local inference servers serve a single request at a time by default
+# (llama.cpp's `--parallel 1`, one Ollama slot). Sasha issues LLM requests from
+# more than one thread: the foreground consult plus the background
+# context-building threads (memory bootstrap and directory recap). Without a
+# lock those race for the one slot and the *server* decides who waits, so a
+# background summary can end up ahead of the user's own question. Queueing here
+# makes the order deterministic instead of a race.
+_REQUEST_LOCK = threading.Lock()
+
+# A DeepSeek-family chat template without a tool-calling section emits the
+# model's native special-token tool-call syntax as plain content instead of
+# populating delta.tool_calls[] (ISSUE-060). Detecting it turns a silent "the
+# model chose not to act" into an actionable diagnosis: every tool is dead on
+# that profile, and no amount of prompt tuning will show it.
+_LEAKED_TOOL_CALL_MARKER = "\uff5ctool\u2581calls\u2581begin\uff5c"
 
 @dataclasses.dataclass(frozen=True)
 class ToolCall:
@@ -35,7 +54,8 @@ class ChatClient:
 
     def chat(self, messages: list[dict], tools: list[dict], 
              on_text: Callable[[str], None],
-             on_reasoning: Callable[[str], None] = lambda chunk: None) -> ChatResponse:
+             on_reasoning: Callable[[str], None] = lambda chunk: None,
+             on_warning: Callable[[str], None] | None = None) -> ChatResponse:
         url = f"{self.profile.base_url.rstrip('/')}/chat/completions"
         
         payload = {
@@ -55,85 +75,111 @@ class ChatClient:
         if self.profile.api_key:
             req.add_header("Authorization", f"Bearer {self.profile.api_key}")
 
+        def _warn(message: str) -> None:
+            if on_warning is not None:
+                on_warning(message)
+
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout_s) as response:
-                full_text = ""
-                tool_call_fragments: dict[int, dict[str, Any]] = {}
-                done_seen = False
+            # Held for the whole request, streaming included — see _REQUEST_LOCK.
+            with _REQUEST_LOCK:
+                with urllib.request.urlopen(req, timeout=self.timeout_s) as response:
+                    full_text = ""
+                    tool_call_fragments: dict[int, dict[str, Any]] = {}
+                    done_seen = False
 
-                for line_bytes in response:
-                    line = line_bytes.decode("utf-8").strip()
-                    if not line:
-                        continue
-                    
-                    if line == "data: [DONE]":
-                        done_seen = True
-                        break
-                    
-                    if not line.startswith("data: "):
-                        continue
-                    
-                    payload_str = line[6:].strip()
-                    if not payload_str:
-                        continue
+                    for line_bytes in response:
+                        line = line_bytes.decode("utf-8").strip()
+                        if not line:
+                            continue
+                        
+                        if line == "data: [DONE]":
+                            done_seen = True
+                            break
+                        
+                        if not line.startswith("data: "):
+                            continue
+                        
+                        payload_str = line[6:].strip()
+                        if not payload_str:
+                            continue
 
-                    try:
-                        data = json.loads(payload_str)
-                    except json.JSONDecodeError:
-                        raise ChatError(f"Invalid JSON payload: {payload_str}")
+                        try:
+                            data = json.loads(payload_str)
+                        except json.JSONDecodeError:
+                            raise ChatError(f"Invalid JSON payload: {payload_str}")
 
-                    choices = data.get("choices", [])
-                    if not choices:
-                        continue
-                    delta = choices[0].get("delta", {})
-                    
-                    if "content" in delta and delta["content"]:
-                        content = delta["content"]
-                        full_text += content
-                        on_text(content)
+                        choices = data.get("choices", [])
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta", {})
+                        
+                        if "content" in delta and delta["content"]:
+                            content = delta["content"]
+                            full_text += content
+                            on_text(content)
 
-                    if "reasoning_content" in delta and delta["reasoning_content"]:
-                        on_reasoning(delta["reasoning_content"])
+                        if "reasoning_content" in delta and delta["reasoning_content"]:
+                            on_reasoning(delta["reasoning_content"])
 
-                    if "tool_calls" in delta:
-                        for tc_delta in delta["tool_calls"]:
-                            index = tc_delta["index"]
-                            if index not in tool_call_fragments:
-                                tool_call_fragments[index] = {
-                                    "id": tc_delta.get("id", ""),
-                                    "name": "",
-                                    "args_parts": []
-                                }
-                            
-                            if "id" in tc_delta and tc_delta["id"]:
-                                tool_call_fragments[index]["id"] = tc_delta["id"]
-                            if "function" in tc_delta:
-                                if "name" in tc_delta["function"] and tc_delta["function"]["name"]:
-                                    tool_call_fragments[index]["name"] = tc_delta["function"]["name"]
-                                if "arguments" in tc_delta["function"] and tc_delta["function"]["arguments"] is not None:
-                                    tool_call_fragments[index]["args_parts"].append(tc_delta["function"]["arguments"])
+                        if "tool_calls" in delta:
+                            for tc_delta in delta["tool_calls"]:
+                                index = tc_delta["index"]
+                                if index not in tool_call_fragments:
+                                    tool_call_fragments[index] = {
+                                        "id": tc_delta.get("id", ""),
+                                        "name": "",
+                                        "args_parts": []
+                                    }
+                                
+                                if "id" in tc_delta and tc_delta["id"]:
+                                    tool_call_fragments[index]["id"] = tc_delta["id"]
+                                if "function" in tc_delta:
+                                    if "name" in tc_delta["function"] and tc_delta["function"]["name"]:
+                                        tool_call_fragments[index]["name"] = tc_delta["function"]["name"]
+                                    if "arguments" in tc_delta["function"] and tc_delta["function"]["arguments"] is not None:
+                                        tool_call_fragments[index]["args_parts"].append(tc_delta["function"]["arguments"])
 
-                if not done_seen:
-                    raise ChatError("Stream ended before [DONE] was received")
+                    if not done_seen:
+                        raise ChatError("Stream ended before [DONE] was received")
 
-                assembled_tool_calls = []
-                for index in sorted(tool_call_fragments.keys()):
-                    fragment = tool_call_fragments[index]
-                    if not fragment["id"] or not fragment["name"]:
-                        continue
-                    
-                    try:
+                    assembled_tool_calls = []
+                    for index in sorted(tool_call_fragments.keys()):
+                        fragment = tool_call_fragments[index]
+                        if not fragment["id"] or not fragment["name"]:
+                            # Truncated or headerless call — dropping it is
+                            # correct (never guess into an execution), but a
+                            # silent drop is indistinguishable from the model
+                            # choosing not to act, which is the confusing case.
+                            _warn(
+                                "[sasha] llm: dropped an incomplete tool call "
+                                f"(index {index}: id={fragment['id']!r}, "
+                                f"name={fragment['name']!r}) — nothing was run")
+                            continue
+                        
                         args_str = "".join(fragment["args_parts"])
-                        args_dict = json.loads(args_str)
-                        assembled_tool_calls.append(ToolCall(
-                            id=fragment["id"],
-                            name=fragment["name"],
-                            arguments=args_dict
-                        ))
-                    except (json.JSONDecodeError, TypeError, ValueError):
-                        continue
-                
-                return ChatResponse(text=full_text, tool_calls=assembled_tool_calls)
+                        try:
+                            args_dict = json.loads(args_str)
+                            assembled_tool_calls.append(ToolCall(
+                                id=fragment["id"],
+                                name=fragment["name"],
+                                arguments=args_dict
+                            ))
+                        except (json.JSONDecodeError, TypeError, ValueError):
+                            _warn(
+                                f"[sasha] llm: dropped a {fragment['name']!r} "
+                                "tool call whose arguments were not valid JSON "
+                                f"({args_str[:120]!r}) — nothing was run")
+                            continue
+
+                    if not assembled_tool_calls and _LEAKED_TOOL_CALL_MARKER in full_text:
+                        _warn(
+                            "[sasha] llm: the model emitted a tool call as raw "
+                            "special-token text instead of a tool_calls delta — "
+                            "no tool ran. This endpoint's chat template has no "
+                            "tool-calling section, so every tool is inert on "
+                            "this profile (see ISSUE-060).")
+                    
+                    return ChatResponse(text=full_text, tool_calls=assembled_tool_calls)
 
         except urllib.error.HTTPError as exc:
             raise ChatError(f"HTTP error: {exc.code}")

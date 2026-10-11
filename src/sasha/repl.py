@@ -621,7 +621,16 @@ class Repl:
                 return
             except KeyboardInterrupt:
                 continue
-            if not self.run_once(line):
+            # run_once is inside the handler too: Ctrl+C during a consult or a
+            # tool call must abort the request and return to the prompt (v1
+            # design §9.5), not unwind out of main() as a traceback (ISSUE-061).
+            try:
+                if not self.run_once(line):
+                    return
+            except KeyboardInterrupt:
+                self._sink.write_line("")
+                continue
+            except EOFError:
                 return
 
 
@@ -641,16 +650,40 @@ class TerminalConfirmer:
                     f"        └ {desc}\n"
                     f"        [y]es / [n]o / [e]dit — or type a reply")
         self._sink.write_line(text)
-        response = self._input_fn("> ").strip()
+        response = self._read("> ")
+        if response is None:
+            return ("no", "")
+        response = response.strip()
         if response in ("y", "yes"):
             return ("yes", "")
         elif response in ("n", "no", ""):
             return ("no", "")
         elif response in ("e", "edit"):
-            edited = self._input_fn("edit> ")
+            edited = self._read("edit> ")
+            if edited is None:
+                # A cancelled edit is a decline. Returning ("edit", "") would
+                # hand the agent loop an empty command to execute.
+                return ("no", "")
             return ("edit", edited)
         else:
             return ("reply", response)
+
+    def _read(self, prompt):
+        """Read one line at the gate; None means cancelled.
+
+        A Ctrl+C or a closed stdin here means "cancel", not "crash": without
+        this, the KeyboardInterrupt unwinds out of Repl.loop() and main() as a
+        raw traceback, because loop()'s own handler wraps only its main-prompt
+        input() call (ISSUE-061). An interrupt is reported as None rather than
+        '' so it stays distinguishable from a deliberate empty answer, which
+        already means "decline" at the first prompt but "edit to empty" at the
+        second.
+        """
+        try:
+            return self._input_fn(prompt)
+        except (KeyboardInterrupt, EOFError):
+            self._sink.write_line("[sasha] cancelled")
+            return None
 
 
 class TerminalQuestioner:

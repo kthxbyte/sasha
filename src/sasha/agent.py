@@ -54,7 +54,7 @@ def run_consult(
             on_reasoning(chunk)
 
         response = client.chat(messages, tools=tools, on_text=_on_text,
-                                on_reasoning=_on_reasoning)
+                                on_reasoning=_on_reasoning, on_warning=warn)
         on_phase(None)
         return response
 
