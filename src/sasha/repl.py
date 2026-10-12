@@ -7,7 +7,6 @@ import shlex
 import shutil
 import socket
 import sys
-import threading
 import traceback
 import uuid
 from typing import Protocol
@@ -15,7 +14,7 @@ from typing import Protocol
 import sasha.config as config
 from sasha.activity_indicator import ActivityIndicator
 from sasha.agent import run_consult
-from sasha.llm import ChatError, background_request
+from sasha.llm import ChatError
 from sasha import git_headline
 from sasha import guard
 from sasha import memory
@@ -23,9 +22,6 @@ from sasha import safe_commands
 from sasha import tool_log
 from sasha.triggers import Decision, decide
 import sasha.prompt as prompt_mod
-
-
-_BULLET_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s*")
 
 
 class Sink(Protocol):
@@ -83,8 +79,6 @@ class Repl:
         self._current_repo_root = None   # pathlib.Path | None
         self._last_checked_cwd = None    # str | None
         self._memory_dir_existed = False
-        self._bootstrap_attempted = set()      # set[pathlib.Path]
-        self._last_bootstrap_thread = None     # threading.Thread | None, test seam
         self._headlined_dirs: set[str] = set()
         self._phase_needs_newline = False
 
@@ -333,17 +327,14 @@ class Repl:
             self._session.set_project_memory("")
             self._memory_dir_existed = False
             return False
-        just_bootstrapped = False
+        just_replayed = False
         memory_dir = new_root / ".sasha" / "memory"
-        pending_marker = memory_dir / ".bootstrap_pending"
         if not memory_dir.exists():
-            just_bootstrapped = self._bootstrap_repo(new_root)
-        elif new_root not in self._bootstrap_attempted and pending_marker.exists():
-            self._retry_bootstrap_summary(new_root)
+            just_replayed = self._replay_history(new_root)
         block, count = memory.load_memory_block(new_root)
         self._session.set_project_memory(block)
         self._memory_dir_existed = memory_dir.exists()
-        if count and not just_bootstrapped:
+        if count and not just_replayed:
             gist = memory.most_recent_gist(new_root)
             self._sink.write_line(
                 f'[sasha] project: {new_root.name} ({count} memories, '
@@ -367,100 +358,32 @@ class Repl:
         if text is not None:
             self._sink.write_line(text)
 
-    def _bootstrap_repo(self, repo_root):
+    def _replay_history(self, repo_root):
+        """Seed project memory from recent commit messages. Free and mechanical.
+
+        This is all that survives of the old two-stage memory bootstrap. Stage 2
+        asked the model to summarise the repository's history and root docs, then
+        wrote its answer into semantic memory as `kind="bootstrap"` entries,
+        which were injected into EVERY later prompt as fact. Three problems made
+        it a net negative: a 26B's summary of git history is not authoritative,
+        a hallucination there is durable and indistinguishable from something the
+        user said, and ISSUE-039 recorded that there was no refresh path — the
+        only remedy was `sasha forget`, which destroys all memory.
+
+        The replay costs nothing, cannot hallucinate, and is regenerated from git
+        whenever memory is absent. A repository with no commits is left
+        completely untouched.
+        """
         history = memory.bounded_history(repo_root)
-        docs = memory.root_docs(repo_root)
-        if not history and not docs:
+        if not history:
             return False
         memory.ensure_memory_dir(repo_root)
         for commit_hash, message in reversed(history):
             memory.encode_commit(repo_root, message, commit_hash)
         self._sink.write_line(
-            f"[sasha] no memory yet for {repo_root.name} — building "
-            f"initial context from history in the background")
-        self._spawn_bootstrap_summary(repo_root, history, docs)
+            f"[sasha] no memory yet for {repo_root.name} — replayed "
+            f"{len(history)} recent commit(s) into project memory")
         return True
-
-    def _retry_bootstrap_summary(self, repo_root):
-        history = memory.bounded_history(repo_root)
-        docs = memory.root_docs(repo_root)
-        if history or docs:
-            self._spawn_bootstrap_summary(repo_root, history, docs)
-        else:
-            self._bootstrap_attempted.add(repo_root)
-            self._clear_bootstrap_pending(repo_root)
-
-    def _spawn_bootstrap_summary(self, repo_root, history, docs):
-        self._bootstrap_attempted.add(repo_root)
-        (repo_root / ".sasha" / "memory" / ".bootstrap_pending").write_text("")
-        thread = threading.Thread(
-            target=self._bootstrap_stage_2,
-            args=(repo_root, history, docs), daemon=True)
-        self._last_bootstrap_thread = thread
-        thread.start()
-
-    def _bootstrap_stage_2(self, repo_root, history, docs):
-        try:
-            prompt = self._build_bootstrap_prompt(history, docs)
-            client = self._client_factory(self._current_profile)
-            # Best-effort: the user's own question always wins over building
-            # initial context in the background.
-            with background_request():
-                response = client.chat(
-                    [{"role": "user", "content": prompt}], [], lambda _: None)
-            lines = self._parse_bootstrap_lines(response.text)
-        except ChatError:
-            lines = []
-        if lines:
-            for line in lines:
-                memory.encode_bootstrap(repo_root, line)
-            write_async_line = getattr(self._sink, "write_async_line",
-                                       self._sink.write_line)
-            write_async_line(self._bootstrap_finish_message(len(lines), docs))
-            self._clear_bootstrap_pending(repo_root)
-
-    def _clear_bootstrap_pending(self, repo_root):
-        pending = repo_root / ".sasha" / "memory" / ".bootstrap_pending"
-        if pending.exists():
-            pending.unlink()
-
-    def _build_bootstrap_prompt(self, history, docs):
-        parts = [
-            "You are helping build initial long-term memory for a "
-            "software project neither of us has seen before. Read the "
-            "material below and respond with 3 to 8 short bullet lines "
-            "(one fact per line, starting with '- '), each a distinct, "
-            "concrete fact about what this project is or does. Do not "
-            "add any other text before, between, or after the bullets."
-        ]
-        if docs:
-            parts.append("### Project documentation")
-            for filename, content in docs:
-                parts.append(f"--- {filename} ---\n{content}")
-        if history:
-            parts.append("### Recent commit history")
-            for _, message in history:
-                parts.append(f"- {message}")
-        return "\n\n".join(parts)
-
-    def _parse_bootstrap_lines(self, text):
-        lines = []
-        for raw_line in text.splitlines():
-            stripped = _BULLET_RE.sub("", raw_line).strip()
-            if stripped:
-                lines.append(stripped)
-            if len(lines) == 8:
-                break
-        return lines
-
-    def _bootstrap_finish_message(self, count, docs):
-        if len(docs) == 1:
-            return (f"[sasha] finished building context: {count} entries "
-                     f"(from {docs[0][0]})")
-        if len(docs) > 1:
-            return (f"[sasha] finished building context: {count} entries "
-                     f"(from {len(docs)} files)")
-        return f"[sasha] finished building context: {count} entries"
 
     def _check_commit(self, line, result):
         if result.exit_code != 0 or self._current_repo_root is None:

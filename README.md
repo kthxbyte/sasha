@@ -401,43 +401,33 @@ memory currently self-installs silently — no equivalent notice yet):
 [sasha] created .sasha/memory/ — remembering context for this project from now on (gitignored automatically)
 ```
 
-#### Bootstrapping memory for an existing project
+#### Starting memory for an existing project
 
-The first time Sasha enters a git repository that already has real
-history to learn from — commits, or root-level docs (`README.md` and
-other `.md`/`.txt`/`.htm(l)` files directly at the repo root) — it builds
-a running start automatically, in two stages, instead of starting from
-nothing:
-
-1. **Instant, mechanical**: recent commit messages are replayed into
-   project memory, exactly as if they'd been encoded as they happened.
-2. **Background, LLM-driven**: those same commits plus any root docs are
-   summarized into a handful of higher-level facts — without blocking
-   the shell. You'll see:
+The first time Sasha enters a git repository it has no memory for, it gives
+itself a running start by replaying recent commit messages into project
+memory, exactly as if they had been encoded as they happened:
 
 ```
-[sasha] no memory yet for sasha — building initial context from history in the background
+[sasha] no memory yet for sasha — replayed 20 recent commit(s) into project memory
 ```
 
-...and the `[sasha]✦` star blinks while it works. When it finishes:
+That is free and mechanical: no LLM call, nothing invented, and because it is
+derived from git it simply happens again if you ever delete the memory. A
+repository with no commits is left completely untouched.
 
-```
-[sasha] finished building context: 6 entries (from README.md)
-```
-
-(naming the file when exactly one root doc contributed, a bare count for
-several, nothing at all if the summary came from commit history alone).
-If the LLM step can't complete — no profile configured, network down —
-the mechanical replay still stands; nothing is lost, and a later session
-gets one more automatic attempt. A repo with neither commits nor root
-docs is left completely untouched, exactly as if this feature didn't
-exist.
+There used to be a second stage here: the model was asked to summarise the
+repository's history and root-level docs into a handful of higher-level facts,
+which were then injected into every later prompt. It was removed. A 26B's
+summary of git history is not authoritative, a hallucination in it is durable
+and indistinguishable from something you told Sasha yourself, and there was no
+way to refresh it — the only fix was `sasha forget`, which destroys all memory.
+The mechanical replay cannot go wrong and costs nothing; the summariser could
+go wrong quietly and cost you trust in everything else Sasha remembered.
 
 `sasha memory` (show what's remembered — general memory always, project
 memory too when you're in a repo) and `sasha forget` (permanently delete
 the *current project's* memory only; general memory isn't touched by it,
-by design) are built-in commands — see Built-in commands under Muting
-below.
+by design) are built-in commands — see Built-in commands below.
 
 ### Skills
 

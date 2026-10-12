@@ -1,9 +1,24 @@
-"""Contract tests — Task 19.3: repl.py stage 1/2 bootstrap wiring into
-_check_place_shift.
+"""Contract tests — Task 19.3: repl.py memory-bootstrap wiring.
 
 Written by Tier 1 at spec time; immutable to the implementer.
 Spec: docs/superpowers/specs/task-19.3-repl-bootstrap-wiring.md
 Design: docs/superpowers/specs/2026-07-18-memory-bootstrap-design.md
+
+AMENDED BY TIER 1 (2026-10-12) for the audit's §4.3: the LLM half of the
+memory bootstrap is GONE. Stage 2 asked the model to summarise the repository's
+history and root docs, wrote its answer into semantic memory as
+`kind="bootstrap"` entries, and injected those into every later prompt as fact.
+A 26B's summary of git history is not authoritative, a hallucination there is
+durable and indistinguishable from something the user said, and ISSUE-039
+recorded that there was no refresh path short of `sasha forget`.
+
+What remains is stage 1 only: a free, mechanical replay of recent commit
+messages into project memory, regenerated from git whenever memory is absent.
+So this file now pins the replay, the "untouched" case, and the ABSENCE of
+everything that was removed — `.bootstrap_pending`, `kind="bootstrap"`
+entries, the background thread, the prompt builder and the response parser —
+so a regression that reintroduces them fails loudly rather than silently
+passing.
 """
 
 import json
@@ -14,7 +29,7 @@ import sys
 import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from sse_stub import StubServer, refused_base_url  # noqa: E402
+from sse_stub import StubServer, refused_base_url  # noqa: E402,F401
 
 
 def _git(repo, *args):
@@ -35,17 +50,6 @@ def _commit(repo, message):
     _git(repo, "commit", "-q", "-m", message)
 
 
-def _commit_no_docs(repo, message):
-    # Tier 1 fix (Phase 19 review): _commit()'s target file, f.txt, has a
-    # .txt extension that root_docs() itself matches — any test that needs
-    # a real commit to exist *and* zero root docs (to isolate a
-    # history-only code path) can't use _commit() without contaminating
-    # its own premise. This variant commits to a non-doc extension instead.
-    (repo / "f.py").write_text(message)
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", message)
-
-
 class FakeExecutor:
     def __init__(self, cwd):
         from sasha.executor import ExecResult
@@ -60,9 +64,6 @@ class FakeExecutor:
     def cwd(self):
         return self._cwd
 
-    # Amended by Tier 1 for Task 25.1 (ISSUE-044): the raw-command path
-    # now calls safe_commands.touches_sensitive_path for every command,
-    # which reads this attribute.
     sensitive_path_patterns = ()
 
     @property
@@ -103,27 +104,20 @@ class SpySink:
         pass
 
 
-def _repl(cwd, stub_url=None):
+def _repl(cwd):
     from sasha.config import Config, Limits, Profile
-    from sasha.llm import ChatClient
     from sasha.repl import Repl
     from sasha.session import Session
 
-    profile = Profile(name="stubprof", base_url=stub_url or "http://unused",
-                       model="stub-model", api_key="")
+    profile = Profile(name="stubprof", base_url="http://unused",
+                      model="stub-model", api_key="")
     config = Config(default_profile="stubprof",
-                     profiles={"stubprof": profile}, limits=Limits())
+                    profiles={"stubprof": profile}, limits=Limits())
     executor = FakeExecutor(cwd)
     sink = SpySink()
     repl = Repl(config, executor, Session(),
-                lambda p: ChatClient(p, timeout_s=10.0), None,
-                lambda prompt: "", sink)
+                lambda p: None, None, lambda prompt: "", sink)
     return repl, executor, sink
-
-
-def _join_if_spawned(repl, timeout=15):
-    if repl._last_bootstrap_thread is not None:
-        repl._last_bootstrap_thread.join(timeout=timeout)
 
 
 def _semantic_entries(repo):
@@ -133,290 +127,157 @@ def _semantic_entries(repo):
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
-# --- AC1: first-time bootstrap of a repo with real commits --------------------
+# --- AC1: first-time replay of a repo with real commits -----------------------
 
-def test_ac1_first_bootstrap_replays_oldest_to_newest(tmp_path):
-    repo = tmp_path / "repo"
+def test_ac1_first_replay_writes_commits_oldest_to_newest(tmp_path):
+    repo = tmp_path / "proj"
     _init_repo(repo)
     _commit(repo, "first commit")
     _commit(repo, "second commit")
     _commit(repo, "third commit")
-    repl, executor, sink = _repl(str(repo))
+
+    repl, executor, sink = _repl(repo)
     repl._check_place_shift()
+
     entries = _semantic_entries(repo)
-    commit_texts = [e["text"] for e in entries if e["kind"] == "commit"]
-    assert commit_texts == ["first commit", "second commit", "third commit"]
-    _join_if_spawned(repl)
+    assert [e["text"] for e in entries] == [
+        "first commit", "second commit", "third commit"]
+    assert all(e["kind"] == "commit" for e in entries)
+    assert all(e["pointer"] for e in entries)
 
 
-def test_ac1_start_line_printed_exactly_once(tmp_path):
-    repo = tmp_path / "repo"
+def test_ac1_replay_line_printed_exactly_once(tmp_path):
+    repo = tmp_path / "proj"
     _init_repo(repo)
     _commit(repo, "only commit")
-    repl, executor, sink = _repl(str(repo))
+
+    repl, executor, sink = _repl(repo)
     repl._check_place_shift()
-    start_lines = [l for l in sink.lines if "no memory yet for repo" in l
-                   and "building initial context" in l]
-    assert len(start_lines) == 1
-    _join_if_spawned(repl)
+    repl._check_place_shift()
+
+    replayed = [l for l in sink.lines if "replayed" in l]
+    assert len(replayed) == 1
+    assert "proj" in replayed[0]
+    assert "1 recent commit" in replayed[0]
+    # the tally is honest about how many commits were replayed
+    assert "1 recent commit(s)" in replayed[0]
 
 
-def test_ac1_no_redundant_project_line_on_first_bootstrap(tmp_path):
-    repo = tmp_path / "repo"
+def test_ac1_memory_is_regenerated_when_absent(tmp_path):
+    """The replay is derived from git, so deleting memory does not lose it."""
+    repo = tmp_path / "proj"
     _init_repo(repo)
-    _commit(repo, "only commit")
-    repl, executor, sink = _repl(str(repo))
+    _commit(repo, "keep me")
+
+    repl, _, _ = _repl(repo)
     repl._check_place_shift()
-    assert not any("memories, last:" in l for l in sink.lines)
-    _join_if_spawned(repl)
+    assert [e["text"] for e in _semantic_entries(repo)] == ["keep me"]
+
+    import shutil
+    shutil.rmtree(repo / ".sasha")
+
+    repl2, _, _ = _repl(repo)
+    repl2._check_place_shift()
+    assert [e["text"] for e in _semantic_entries(repo)] == ["keep me"]
 
 
-def test_ac1_pending_sentinel_written_synchronously(tmp_path):
-    repo = tmp_path / "repo"
+def test_ac1_no_bootstrap_entries_and_no_pending_sentinel(tmp_path):
+    """Stage 2 is gone; nothing may write `kind="bootstrap"` or a marker."""
+    repo = tmp_path / "proj"
     _init_repo(repo)
-    _commit(repo, "only commit")
-    repl, executor, sink = _repl(str(repo))
+    _commit(repo, "a commit")
+    (repo / "README.md").write_text("# Project\n\nLots of docs.\n")
+
+    repl, _, _ = _repl(repo)
     repl._check_place_shift()
-    assert (repo / ".sasha" / "memory" / ".bootstrap_pending").exists()
-    _join_if_spawned(repl)
+
+    assert all(e["kind"] != "bootstrap" for e in _semantic_entries(repo))
+    memory_dir = repo / ".sasha" / "memory"
+    assert not (memory_dir / ".bootstrap_pending").exists()
+    # and no thread was started at all
+    assert not hasattr(repl, "_last_bootstrap_thread")
+    assert not hasattr(repl, "_bootstrap_attempted")
 
 
-# --- AC2: genuinely empty repo is completely untouched -------------------------
+def test_ac1_stage_two_helpers_are_gone(tmp_path):
+    from sasha.repl import Repl
 
-def test_ac2_empty_repo_no_docs_creates_nothing(tmp_path):
-    repo = tmp_path / "repo"
-    _init_repo(repo)
-    repl, executor, sink = _repl(str(repo))
+    for name in ("_bootstrap_repo", "_retry_bootstrap_summary",
+                 "_spawn_bootstrap_summary", "_bootstrap_stage_2",
+                 "_clear_bootstrap_pending", "_build_bootstrap_prompt",
+                 "_parse_bootstrap_lines", "_bootstrap_finish_message"):
+        assert not hasattr(Repl, name), f"{name} should have been removed"
+    assert hasattr(Repl, "_replay_history")
+
+
+# --- AC2: genuinely empty repo is completely untouched ------------------------
+
+def test_ac2_empty_repo_creates_nothing(tmp_path):
+    repo = tmp_path / "proj"
+    _init_repo(repo)          # git repo, zero commits
+
+    repl, _, sink = _repl(repo)
     repl._check_place_shift()
+
     assert not (repo / ".sasha").exists()
-    assert not any("no memory yet" in l for l in sink.lines)
-    assert repl._last_bootstrap_thread is None
+    assert not any("replayed" in l for l in sink.lines)
 
 
-# --- AC3: docs without commits still spawns stage 2 ----------------------------
-
-def test_ac3_docs_without_commits_spawns_stage2(tmp_path):
-    repo = tmp_path / "repo"
+def test_ac2_repo_with_docs_but_no_commits_is_untouched(tmp_path):
+    """Docs used to feed the summariser; with stage 2 gone they are not a
+    reason to create memory at all."""
+    repo = tmp_path / "proj"
     _init_repo(repo)
-    (repo / "README.md").write_text("This project does X.")
-    repl, executor, sink = _repl(str(repo))
+    (repo / "README.md").write_text("# Docs but no commits\n")
+
+    repl, _, sink = _repl(repo)
     repl._check_place_shift()
-    assert repl._last_bootstrap_thread is not None
-    _join_if_spawned(repl)
 
-
-# --- AC4-5: stage 2 success ------------------------------------------------------
-
-def test_ac4_stage2_success_writes_bootstrap_entries(tmp_path):
-    repo = tmp_path / "repo"
-    _init_repo(repo)
-    _commit(repo, "initial commit")
-    with StubServer([{"kind": "text",
-                       "text": "- fact one\n- fact two\n- fact three"}]) as stub:
-        repl, executor, sink = _repl(str(repo), stub_url=stub.base_url)
-        repl._check_place_shift()
-        _join_if_spawned(repl)
-    entries = _semantic_entries(repo)
-    bootstrap_entries = [e for e in entries if e["kind"] == "bootstrap"]
-    assert len(bootstrap_entries) == 3
-    assert all(e["pointer"] is None for e in bootstrap_entries)
-    assert {e["text"] for e in bootstrap_entries} == {
-        "fact one", "fact two", "fact three"}
-    assert not (repo / ".sasha" / "memory" / ".bootstrap_pending").exists()
-
-
-def test_ac5_finish_line_names_single_file(tmp_path):
-    repo = tmp_path / "repo"
-    _init_repo(repo)
-    (repo / "README.md").write_text("about this project")
-    with StubServer([{"kind": "text", "text": "- a fact"}]) as stub:
-        repl, executor, sink = _repl(str(repo), stub_url=stub.base_url)
-        repl._check_place_shift()
-        _join_if_spawned(repl)
-    assert any(
-        l == "[sasha] finished building context: 1 entries (from README.md)"
-        for l in sink.lines)
-
-
-def test_ac5_finish_line_states_count_for_multiple_files(tmp_path):
-    repo = tmp_path / "repo"
-    _init_repo(repo)
-    (repo / "README.md").write_text("about this project")
-    (repo / "NOTES.txt").write_text("more notes")
-    with StubServer([{"kind": "text", "text": "- a fact"}]) as stub:
-        repl, executor, sink = _repl(str(repo), stub_url=stub.base_url)
-        repl._check_place_shift()
-        _join_if_spawned(repl)
-    assert any(
-        l == "[sasha] finished building context: 1 entries (from 2 files)"
-        for l in sink.lines)
-
-
-def test_ac5_finish_line_omits_file_mention_for_history_only(tmp_path):
-    repo = tmp_path / "repo"
-    _init_repo(repo)
-    _commit_no_docs(repo, "initial commit")
-    with StubServer([{"kind": "text", "text": "- a fact"}]) as stub:
-        repl, executor, sink = _repl(str(repo), stub_url=stub.base_url)
-        repl._check_place_shift()
-        _join_if_spawned(repl)
-    finish_lines = [l for l in sink.lines if "finished building context" in l]
-    assert finish_lines == ["[sasha] finished building context: 1 entries"]
-
-
-def test_ac5_finish_line_names_single_file_alongside_history(tmp_path):
-    # The realistic common case: a repo with both real commit history and
-    # exactly one root doc (e.g. a README) should still name that file —
-    # crediting docs must not depend on whether history is also present.
-    repo = tmp_path / "repo"
-    _init_repo(repo)
-    _commit_no_docs(repo, "initial commit")
-    (repo / "README.md").write_text("about this project")
-    with StubServer([{"kind": "text", "text": "- a fact"}]) as stub:
-        repl, executor, sink = _repl(str(repo), stub_url=stub.base_url)
-        repl._check_place_shift()
-        _join_if_spawned(repl)
-    assert any(
-        l == "[sasha] finished building context: 1 entries (from README.md)"
-        for l in sink.lines)
-
-
-# --- AC6-7: stage 2 failure ------------------------------------------------------
-
-def test_ac6_stage2_unreachable_writes_nothing_and_keeps_sentinel(tmp_path):
-    repo = tmp_path / "repo"
-    _init_repo(repo)
-    _commit(repo, "initial commit")
-    repl, executor, sink = _repl(str(repo), stub_url=refused_base_url())
-    repl._check_place_shift()
-    _join_if_spawned(repl)
-    entries = _semantic_entries(repo)
-    assert not any(e["kind"] == "bootstrap" for e in entries)
-    assert not any("finished building context" in l for l in sink.lines)
-    assert (repo / ".sasha" / "memory" / ".bootstrap_pending").exists()
-
-
-def test_ac7_stage2_empty_response_writes_nothing(tmp_path):
-    repo = tmp_path / "repo"
-    _init_repo(repo)
-    _commit(repo, "initial commit")
-    with StubServer([{"kind": "text", "text": ""}]) as stub:
-        repl, executor, sink = _repl(str(repo), stub_url=stub.base_url)
-        repl._check_place_shift()
-        _join_if_spawned(repl)
-    entries = _semantic_entries(repo)
-    assert not any(e["kind"] == "bootstrap" for e in entries)
-    assert not any("finished building context" in l for l in sink.lines)
-    assert (repo / ".sasha" / "memory" / ".bootstrap_pending").exists()
-
-
-# --- AC8: _parse_bootstrap_lines direct --------------------------------------
-
-def test_ac8_parse_bootstrap_lines_strips_markers_and_caps_at_8(tmp_path):
-    repl, executor, sink = _repl(str(tmp_path))
-    text = "\n".join([
-        "- dash fact",
-        "* star fact",
-        "• bullet fact",
-        "1. numbered dot fact",
-        "2) numbered paren fact",
-        "",
-        "plain fact no marker",
-        "extra one", "extra two", "extra three",
-    ])
-    result = repl._parse_bootstrap_lines(text)
-    assert result == [
-        "dash fact", "star fact", "bullet fact", "numbered dot fact",
-        "numbered paren fact", "plain fact no marker", "extra one",
-        "extra two",
-    ]
-
-
-def test_ac8_parse_bootstrap_lines_empty_text_returns_empty(tmp_path):
-    repl, executor, sink = _repl(str(tmp_path))
-    assert repl._parse_bootstrap_lines("") == []
-    assert repl._parse_bootstrap_lines("   \n   \n") == []
-
-
-# --- AC9: _build_bootstrap_prompt direct --------------------------------------
-
-def test_ac9_build_prompt_includes_both_sections(tmp_path):
-    repl, executor, sink = _repl(str(tmp_path))
-    docs = [("README.md", "unique readme content xyz")]
-    history = [("h1", "unique commit message xyz")]
-    prompt = repl._build_bootstrap_prompt(history, docs)
-    assert "### Project documentation" in prompt
-    assert "### Recent commit history" in prompt
-    assert "unique readme content xyz" in prompt
-    assert "unique commit message xyz" in prompt
-
-
-def test_ac9_build_prompt_omits_empty_sections(tmp_path):
-    repl, executor, sink = _repl(str(tmp_path))
-    docs_only = repl._build_bootstrap_prompt([], [("README.md", "content")])
-    assert "### Project documentation" in docs_only
-    assert "### Recent commit history" not in docs_only
-
-    history_only = repl._build_bootstrap_prompt([("h1", "msg")], [])
-    assert "### Recent commit history" in history_only
-    assert "### Project documentation" not in history_only
-
-
-# --- AC10: retry attempts once per session -------------------------------------
-
-def test_ac10_retry_only_attempts_once_per_session(tmp_path):
-    from sasha import memory
-    repo = tmp_path / "repo"
-    _init_repo(repo)
-    _commit(repo, "initial commit")
-    memory.ensure_memory_dir(repo)
-    memory.encode_commit(repo, "initial commit", "deadbeef")
-    (repo / ".sasha" / "memory" / ".bootstrap_pending").write_text("")
-
-    with StubServer([{"kind": "http_error", "status": 500},
-                      {"kind": "http_error", "status": 500}]) as stub:
-        repl, executor, sink = _repl(str(repo), stub_url=stub.base_url)
-        repl._check_place_shift()
-        _join_if_spawned(repl)
-
-        other = tmp_path / "other"
-        other.mkdir()
-        executor._cwd = str(other)
-        repl._check_place_shift()
-
-        executor._cwd = str(repo)
-        repl._check_place_shift()
-        _join_if_spawned(repl)
-
-    assert len(stub.requests) == 1
-
-
-# --- AC11: no sentinel means never touched, regardless of attempted-set -------
-
-def test_ac11_no_pending_sentinel_never_spawns(tmp_path):
-    from sasha import memory
-    repo = tmp_path / "repo"
-    _init_repo(repo)
-    _commit(repo, "initial commit")
-    memory.ensure_memory_dir(repo)
-    memory.encode_commit(repo, "initial commit", "deadbeef")
-    # deliberately no .bootstrap_pending sentinel — simulates either a
-    # fully-succeeded prior bootstrap or a pre-Task-19.3 (Phase 17/18)
-    # directory that predates this feature entirely.
-    repl, executor, sink = _repl(str(repo))
-    repl._check_place_shift()
-    assert repl._last_bootstrap_thread is None
-
-
-# --- AC12: existing creation-notice path is unaffected on a truly empty repo ---
-
-def test_ac12_creation_notice_still_fires_via_commit_hook_on_empty_repo(tmp_path):
-    repo = tmp_path / "repo"
-    _init_repo(repo)
-    repl, executor, sink = _repl(str(repo))
-    repl._check_place_shift()
     assert not (repo / ".sasha").exists()
-    _commit(repo, "the first ever commit")
-    repl.run_once('git commit -m "the first ever commit"')
-    creation_notices = [l for l in sink.lines if "created .sasha/memory/" in l]
-    assert len(creation_notices) == 1
+    assert not any("replayed" in l for l in sink.lines)
+
+
+# --- AC3: a second entry does not re-replay ------------------------------------
+
+def test_ac3_existing_memory_is_not_replayed_again(tmp_path):
+    repo = tmp_path / "proj"
+    _init_repo(repo)
+    _commit(repo, "only commit")
+
+    repl, _, _ = _repl(repo)
+    repl._check_place_shift()
+    first = _semantic_entries(repo)
+
+    repl2, _, sink2 = _repl(repo)
+    repl2._check_place_shift()
+
+    assert _semantic_entries(repo) == first        # no duplicates
+    assert not any("replayed" in l for l in sink2.lines)
+    # instead you get the project line, which carries the last gist
+    assert any("project: proj (1 memories" in l for l in sink2.lines)
+
+
+# --- AC4: the model is never consulted ----------------------------------------
+
+def test_ac4_no_llm_call_is_ever_made(tmp_path):
+    """The whole point: the replay is free. A client_factory that fails the
+    test if it is even called proves it."""
+    from sasha.config import Config, Limits, Profile
+    from sasha.repl import Repl
+    from sasha.session import Session
+
+    repo = tmp_path / "proj"
+    _init_repo(repo)
+    _commit(repo, "no llm please")
+
+    def exploding_factory(profile):
+        raise AssertionError("the bootstrap must not call the model")
+
+    config = Config(default_profile="p",
+                    profiles={"p": Profile("p", "http://x/v1", "m", "", False)},
+                    limits=Limits())
+    repl = Repl(config, FakeExecutor(repo), Session(), exploding_factory,
+                None, lambda prompt: "", SpySink())
+    repl._check_place_shift()
+
+    assert [e["text"] for e in _semantic_entries(repo)] == ["no llm please"]
