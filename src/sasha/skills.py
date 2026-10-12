@@ -10,9 +10,12 @@ USE_SKILL_SCHEMA = {
     "function": {
         "name": "use_skill",
         "description": (
-            "Load a named skill into context — a packaged set of "
-            "instructions for a specific kind of task. Use one when the "
-            "current task matches a listed skill's description."),
+            "Load one of the skills listed under 'Available skills' in your "
+            "instructions, using the exact name shown there. A skill is a "
+            "packaged set of instructions for a specific kind of task. This "
+            "only READS a listed skill: it cannot save, store or remember "
+            "anything — the `remember` tool does that — and a name that is not "
+            "in the list will fail."),
         "parameters": {
             "type": "object",
             "properties": {

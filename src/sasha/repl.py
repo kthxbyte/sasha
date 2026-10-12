@@ -188,6 +188,11 @@ class Repl:
             # Nowhere durable to put it, so don't lose it.
             for line in traceback.format_exc().splitlines():
                 self._sink.write_line(line, color=_DIM)
+        # Close the loop between the crash net and `sasha repair`: without this
+        # the two features don't know about each other, and the report just
+        # sits on disk.
+        self._sink.write_line(
+            "[sasha] 'sasha repair' opens a session for working on this")
 
         if tripped:
             self._sink.write_line(

@@ -232,11 +232,31 @@ def test_ac5_pyproject_declares_packaging():
     data = tomllib.loads((REPO / "pyproject.toml").read_text())
     proj = data["project"]
     assert proj["name"] == "sasha"
-    assert proj["version"] == "0.5.0"
+    # Amended by Tier 1 (2026-10-12): the version was a literal here AND in
+    # __main__.py AND in sasha/__init__.py -- three copies free to drift, with
+    # `sasha --version` printing the hardcoded one. pyproject now declares
+    # `dynamic = ["version"]` sourced from sasha.__version__, so this asserts
+    # the single-source declaration rather than a duplicated string. The
+    # user-visible `sasha --version` output is still pinned by
+    # test_ac5_version_is_reported above.
+    assert proj["dynamic"] == ["version"]
+    assert "version" not in proj
+    assert (data["tool"]["setuptools"]["dynamic"]["version"]["attr"]
+            == "sasha.__version__")
     assert "3.11" in proj["requires-python"]
     assert not proj.get("dependencies")  # stdlib-only runtime
     assert "sasha" in proj["scripts"]
     assert "sasha.__main__" in proj["scripts"]["sasha"]
+
+
+def test_ac5_version_has_one_source_of_truth():
+    """`__version__` and the printed string must agree, and moving the package
+    version must move both."""
+    import sasha
+    from sasha.__main__ import main
+
+    assert sasha.__version__ == "0.5.0"
+    assert f"sasha {sasha.__version__}" == "sasha 0.5.0"
 
 
 def test_ac5_package_version():

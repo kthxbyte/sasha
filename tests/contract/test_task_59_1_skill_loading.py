@@ -115,9 +115,17 @@ def test_ac1_use_skill_schema_exact():
         "function": {
             "name": "use_skill",
             "description": (
-                "Load a named skill into context — a packaged set of "
-                "instructions for a specific kind of task. Use one when the "
-                "current task matches a listed skill's description."),
+                # Amended by Tier 1 (2026-10-12): a live probe against the
+                # local 26B caught it calling use_skill(name="remember") --
+                # mistaking a tool for a skill. The description now says the
+                # name must come from the listed skills, and that this only
+                # reads (remembering is the `remember` tool's job).
+                "Load one of the skills listed under 'Available skills' in your "
+                "instructions, using the exact name shown there. A skill is a "
+                "packaged set of instructions for a specific kind of task. This "
+                "only READS a listed skill: it cannot save, store or remember "
+                "anything — the `remember` tool does that — and a name that is not "
+                "in the list will fail."),
             "parameters": {
                 "type": "object",
                 "properties": {

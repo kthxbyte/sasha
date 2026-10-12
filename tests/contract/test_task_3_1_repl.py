@@ -88,7 +88,17 @@ def _repl(stub_url, script=None):
                          model="other-model", api_key="other-key"),
     }
     config = Config(default_profile="stubprof", profiles=profiles,
-                    limits=Limits())
+                    limits=Limits(),
+                    # Amended by Tier 1 (2026-10-12), fixing ISSUE-057: the
+                    # passive directory-recap cascade is enabled by default and
+                    # spawns a BACKGROUND thread that makes its own LLM request.
+                    # For this helper's fake cwd ("/spy") decide() legitimately
+                    # returns ESCALATE, so whether that request lands before or
+                    # after a test's `len(stub.requests) == N` assertion is pure
+                    # thread-scheduling luck. The recap is irrelevant to
+                    # everything these tests assert, so switch it off here
+                    # rather than making every request-count assertion racy.
+                    directory_recap_enabled=False)
     executor = SpyExecutor()
     out_chunks = []
     factory_calls = []
@@ -200,15 +210,24 @@ def test_ac5_success_is_silent():
 def test_ac6_no_offer_line_and_no_mute_notice():
     # Amended by Tier 1 (2026-10-12): ISSUE-067 removed both the offer line and
     # the auto-mute notice from the user-visible vocabulary.
-    with StubServer([{"kind": "text", "text": "explained"}] * 5) as stub:
+    #
+    # The stub is deliberately given an EMPTY script, so each consult fails
+    # immediately with a fast 500 instead of streaming a response. Five
+    # streamed responses made this test sensitive to load: a client timeout
+    # mid-stream reset the connection and failed the stub. An empty script
+    # still proves what matters -- one consult was ATTEMPTED per failure --
+    # and does it deterministically.
+    with StubServer([]) as stub:
         repl, executor, out, _ = _repl(stub.base_url)
         executor.next_exit = 3
         for n in range(5):                      # five identical failures
             repl.run_once("badcmd")
-    assert len(stub.requests) == 5              # every one consulted
+        assert len(stub.requests) == 5          # every one attempted a consult
     text = _out_text(out)
     assert "press Enter to ask" not in text
     assert "muting offers for" not in text
+    # each failed consult reported itself, rather than being silently dropped
+    assert text.count("unreachable:") == 5
 
 
 # --- AC7: builtins ---------------------------------------------------------------------------------

@@ -8,6 +8,7 @@ import sys
 import tempfile
 import traceback
 
+from sasha import __version__
 from sasha import completion
 from sasha import guard
 from sasha import paste_join
@@ -143,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.version:
-        print("sasha 0.5.0")
+        print(f"sasha {__version__}")
         return 0
 
     # Setup failures have no session state to preserve, so this net is about
@@ -164,6 +165,8 @@ def _report_setup_failure(exc: Exception) -> int:
         print(f"sasha: full traceback: {bundle}", file=sys.stderr)
     else:
         traceback.print_exc()
+    print("sasha: 'sasha repair' opens a session for working on this",
+          file=sys.stderr)
     return 1
 
 
