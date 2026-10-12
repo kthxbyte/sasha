@@ -5,8 +5,11 @@ import pathlib
 import readline
 import select
 import sys
+import tempfile
+import traceback
 
 from sasha import completion
+from sasha import guard
 from sasha import paste_join
 from sasha import personality
 from sasha import llm_debug
@@ -67,6 +70,28 @@ def main(argv: list[str] | None = None) -> int:
         print("sasha 0.5.0")
         return 0
 
+    # Setup failures have no session state to preserve, so this net is about
+    # reporting rather than recovery: one clean line plus a crash report,
+    # instead of a raw traceback out of a half-built REPL.
+    try:
+        return _run(args)
+    except Exception as exc:
+        return _report_setup_failure(exc)
+
+
+def _report_setup_failure(exc: Exception) -> int:
+    print(f"sasha: failed to start: {guard.describe(exc)}", file=sys.stderr)
+    bundle = guard.write_crash_bundle(
+        _state_dir(), exc,
+        context={"cwd": os.getcwd(), "argv": " ".join(sys.argv)})
+    if bundle is not None:
+        print(f"sasha: full traceback: {bundle}", file=sys.stderr)
+    else:
+        traceback.print_exc()
+    return 1
+
+
+def _run(args) -> int:
     try:
         config = load(args.config)
     except ConfigError as e:
@@ -85,7 +110,25 @@ def main(argv: list[str] | None = None) -> int:
     limits = config.limits
 
     state_dir = _state_dir()
-    state_dir.mkdir(parents=True, exist_ok=True)
+    state_notice = None
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        # An unwritable $HOME (read-only home, full disk, container) must not
+        # stop Sasha from starting: running commands needs no state at all.
+        # Fall back to a private temp dir so mutes/history/reports still work
+        # for this session, and say so rather than dying with a raw traceback.
+        original = state_dir
+        try:
+            state_dir = pathlib.Path(tempfile.mkdtemp(prefix="sasha-state-"))
+        except OSError:
+            # Nothing writable anywhere. Keep the unusable path: mutes.py
+            # already tolerates an unreadable store on read, and a failed
+            # write is caught by the REPL's crash net.
+            state_dir = original
+        reason = exc.strerror or str(exc)
+        state_notice = (f"[sasha] can't use {original} ({reason}) — "
+                        f"running without saved state this session")
 
     executor = Executor(
         os.getcwd(),
@@ -116,6 +159,9 @@ def main(argv: list[str] | None = None) -> int:
     if config.notice:
         sink.write_line(config.notice)
 
+    if state_notice:
+        sink.write_line(state_notice)
+
     confirmer = TerminalConfirmer(_joined_input, sink)
     questioner = TerminalQuestioner(_joined_input, sink)
 
@@ -138,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
         sink=sink,
         getpass_fn=getpass.getpass,
         questioner=questioner,
+        state_dir=state_dir,
     )
 
     if profile_name != config.default_profile:
@@ -184,7 +231,10 @@ def main(argv: list[str] | None = None) -> int:
     repl.loop()
 
     readline.set_history_length(1000)
-    readline.write_history_file(str(history_path))
+    try:
+        readline.write_history_file(str(history_path))
+    except OSError:
+        pass
 
     return 0
 

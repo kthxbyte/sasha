@@ -594,6 +594,36 @@ If the LLM endpoint is down or unreachable, Sasha prints:
 The shell keeps working as a normal shell — the LLM layer failing never breaks
 command execution.
 
+#### Internal errors
+
+An unexpected error *inside Sasha* no longer ends the session. Sasha repairs
+the terminal, writes a crash report, and returns to the prompt with your
+conversation, working directory and scrollback intact:
+
+```
+[sasha] internal error: RuntimeError: something went wrong  (repl.py:412)
+[sasha] full traceback: ~/.local/state/sasha/crashes/20261012T063352Z-4821.txt
+[sasha] this session is still alive — press Enter to continue
+```
+
+Crash reports land in `~/.local/state/sasha/crashes/` as a `.txt` (readable)
+and a `.json` twin (machine-readable), each carrying the traceback, cwd,
+profile, argv, your last few commands, and the git revision of the running
+checkout. So "it broke" is reproducible after the fact, not just once.
+
+If the same failure keeps recurring — a systematic fault that no amount of
+retrying will get past — Sasha stops catching it after 3 occurrences and exits
+cleanly to bash rather than looping on the same traceback:
+
+```
+[sasha] that same failure has now happened 3 times — exiting instead of looping. Your shell is unaffected.
+```
+
+An unwritable state directory (read-only `$HOME`, full disk, an unusual
+container) no longer prevents startup either: Sasha falls back to a temporary
+directory for the session and says so, instead of dying before the first
+prompt.
+
 ### Loop detection
 
 Sasha stops the agent loop for two distinct reasons, worded differently so
@@ -641,6 +671,8 @@ Sasha writes its state to `~/.local/state/sasha/`:
 
 - `mutes.json` — mute counters (atomic write, survives corruption)
 - `history` — readline command history (1000-entry cap)
+- `crashes/` — crash reports from internal errors, as `.txt` + `.json`
+  (see Resilience above)
 - `tool_log.jsonl` — an append-only record of every tool call (name,
   arguments, verdict, and result unless it touched a sensitive path),
   auto-compacted (stored results stripped) once it passes

@@ -44,6 +44,21 @@ class ActivityIndicator:
         self._thread = None
         self._stop_event = None
 
+    @staticmethod
+    def restore_terminal() -> None:
+        """Emit whatever undoes this indicator's terminal changes.
+
+        Safe to call when it was never started, when `stop()` already ran, or
+        when its thread is wedged — which is exactly the situation after an
+        exception escaped mid-consult and left the cursor hidden. Never raises.
+        """
+        try:
+            sys.stdout.write(_SHOW)
+            sys.stdout.write(_RESET_COLOR)
+            sys.stdout.flush()
+        except Exception:
+            pass
+
     def _run(self, color: str, stop_event: threading.Event) -> None:
         self._emit(f"\x1b]12;{color}\x07")
         visible = True

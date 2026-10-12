@@ -8,6 +8,7 @@ import shutil
 import socket
 import sys
 import threading
+import traceback
 import uuid
 from typing import Protocol
 
@@ -16,6 +17,7 @@ from sasha.activity_indicator import ActivityIndicator
 from sasha.agent import run_consult
 from sasha.llm import ChatError
 from sasha import directory_recap
+from sasha import guard
 from sasha import memory
 from sasha import safe_commands
 from sasha import tool_log
@@ -56,7 +58,7 @@ def _boot_api_line(profile):
 class Repl:
     def __init__(self, config, executor, mutes, session, client_factory,
                  confirmer, input_fn, sink, getpass_fn=getpass.getpass,
-                 questioner=None):
+                 questioner=None, state_dir=None, breaker=None):
         self._config = config
         self._executor = executor
         self._mutes = mutes
@@ -67,6 +69,11 @@ class Repl:
         self._sink = sink
         self._getpass_fn = getpass_fn
         self._questioner = questioner
+        # Where crash reports go; None means "no persistent state" (the
+        # read-only-$HOME fallback), in which case the net still runs but
+        # prints the traceback instead of writing it.
+        self._state_dir = state_dir
+        self._breaker = breaker if breaker is not None else guard.CircuitBreaker()
         self._current_profile = config.profiles[config.default_profile]
         self._activity = ActivityIndicator(
             colors={"thinking": config.activity_indicator_thinking_color,
@@ -128,6 +135,74 @@ class Repl:
             self._activity.stop()
             self._sink.ensure_newline()
             self._check_memory_created()
+
+    def _repair_after_crash(self) -> None:
+        """Best-effort terminal repair. Never raises: this runs *because*
+        something already failed."""
+        try:
+            self._activity.stop()
+        except Exception:
+            pass
+        self._phase_needs_newline = False
+        try:
+            ActivityIndicator.restore_terminal()
+        except Exception:
+            pass
+        try:
+            self._sink.repair_terminal_state()
+        except Exception:
+            pass
+
+    def _crash_context(self) -> dict:
+        notes = getattr(self._session, "notes", None) or []
+        context = {
+            "cwd": self._executor.cwd,
+            "profile": self._current_profile.name,
+            "model": self._current_profile.model,
+            "argv": " ".join(sys.argv),
+            "recent_commands": " | ".join(
+                f"{n.line} ({n.exit_code})" for n in notes[-5:]),
+        }
+        context.update(guard.git_state())
+        return context
+
+    def _handle_crash(self, exc: Exception) -> bool:
+        """Keep the session alive through an internal error.
+
+        Repairs the terminal, writes a crash report, and tells the user where
+        it is. Returns False when the same failure keeps recurring, in which
+        case the caller should exit cleanly rather than loop forever.
+        """
+        sig = guard.signature(exc)
+        tripped = self._breaker.record(sig)
+        repeats = self._breaker.count(sig)
+
+        self._repair_after_crash()
+
+        bundle = guard.write_crash_bundle(
+            self._state_dir, exc, context=self._crash_context(),
+            signature_name=sig)
+
+        self._sink.write_line(f"[sasha] internal error: {guard.describe(exc)}")
+        if bundle is not None:
+            self._sink.write_line(f"[sasha] full traceback: {bundle}")
+        else:
+            # Nowhere durable to put it, so don't lose it.
+            for line in traceback.format_exc().splitlines():
+                self._sink.write_line(line, color=_DIM)
+
+        if tripped:
+            self._sink.write_line(
+                f"[sasha] that same failure has now happened {repeats} times — "
+                f"exiting instead of looping. Your shell is unaffected.")
+            if bundle is not None:
+                self._sink.write_line(
+                    f"[sasha] start here: {bundle}")
+            return False
+
+        self._sink.write_line(
+            "[sasha] this session is still alive — press Enter to continue")
+        return True
 
     def _handle_pending_offer_ignore(self):
         if self._pending_offer is not None:
@@ -649,6 +724,14 @@ class Repl:
                 continue
             except EOFError:
                 return
+            except Exception as exc:
+                # The crash safety net. Keeping the process alive here is what
+                # preserves the session: history, cwd/env, and scrollback all
+                # survive, so the repair consult starts warm. Except clauses are
+                # ordered so KeyboardInterrupt/EOFError keep their meaning.
+                if not self._handle_crash(exc):
+                    return
+                continue
 
 
 class TerminalConfirmer:
@@ -989,3 +1072,31 @@ class TerminalSink:
             sys.stdout.write("\n")
             self._ends_in_newline = True
         sys.stdout.flush()
+
+    def repair_terminal_state(self) -> None:
+        """Return the terminal to a sane state after an exception escaped
+        mid-render. Best effort and never raises — this runs *because*
+        something already failed, so it must not add a second failure.
+
+        Without it, a crash mid-stream can leave an unterminated SGR run (the
+        rest of the session comes out in the wrong colour), a half-drawn
+        reasoning preview, and the prompt printed on the same line as
+        half-finished output.
+        """
+        try:
+            self._finish_reasoning_preview()
+        except Exception:
+            pass
+        try:
+            self._close_chunk_run()
+        except Exception:
+            pass
+        try:
+            sys.stdout.write(_RESET)
+            if not self._ends_in_newline:
+                sys.stdout.write("\n")
+            sys.stdout.flush()
+        except Exception:
+            pass
+        self._ends_in_newline = True
+        self._preview_shown = False

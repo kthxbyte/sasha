@@ -237,6 +237,83 @@ class Executor:
         stopped = False
         already_reaped = False
         reaped_status = None
+        status = None
+        ctrl_z_terminated = False
+
+        def _harvest_and_restore(*, best_effort: bool) -> None:
+            """Reap the child and hand the terminal back.
+
+            Defined as a closure so the `finally` below can run it on *both*
+            the normal and the exception path. Previously this code sat after
+            the try/finally in straight-line order, so an exception escaping
+            the relay loop skipped all of it: the terminal stayed in whatever
+            mode the child had set (possibly raw), the child went unreaped,
+            Sasha stayed background relative to fd 0, and the PTY fds leaked.
+
+            Every fallible step is individually guarded; when `best_effort` is
+            set (an exception is already propagating) a cleanup failure is
+            suppressed rather than allowed to mask the original exception.
+            """
+            nonlocal status, ctrl_z_terminated
+            try:
+                if stopped:
+                    try:
+                        os.killpg(pid, signal.SIGCONT)
+                    except OSError:
+                        pass
+                    try:
+                        os.killpg(pid, signal.SIGTERM)
+                    except OSError:
+                        pass
+                    status = None
+                    for _ in range(50):
+                        wpid, wstatus = os.waitpid(pid, os.WNOHANG)
+                        if wpid != 0:
+                            status = wstatus
+                            break
+                        time.sleep(0.02)
+                    if status is None:
+                        try:
+                            os.killpg(pid, signal.SIGKILL)
+                        except OSError:
+                            pass
+                        _, status = os.waitpid(pid, 0)
+                    ctrl_z_terminated = True
+                elif already_reaped:
+                    status = reaped_status
+                else:
+                    _, status = os.waitpid(pid, 0)
+
+                if interactive:
+                    try:
+                        os.tcsetpgrp(0, sasha_pgid)
+                    except OSError:
+                        pass
+                    signal.signal(signal.SIGTTOU, old_sigttou)
+                    signal.signal(signal.SIGTTIN, old_sigttin)
+                    signal.signal(signal.SIGCHLD, old_sigchld)
+                    for fd in (chld_read, chld_write):
+                        if fd is not None:
+                            try:
+                                os.close(fd)
+                            except OSError:
+                                pass
+
+                if saved_termios is not None:
+                    try:
+                        termios.tcsetattr(0, termios.TCSADRAIN, saved_termios)
+                    except OSError:
+                        pass
+
+                for fd in (err_master, out_master, read_fd):
+                    if fd is not None:
+                        try:
+                            os.close(fd)
+                        except OSError:
+                            pass
+            except Exception:
+                if not best_effort:
+                    raise
 
         old_sigint = signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
@@ -329,58 +406,9 @@ class Executor:
         finally:
             signal.signal(signal.SIGINT, old_sigint)
             signal.signal(signal.SIGWINCH, old_sigwinch)
-
-        ctrl_z_terminated = False
-
-        if stopped:
-            try:
-                os.killpg(pid, signal.SIGCONT)
-            except OSError:
-                pass
-            try:
-                os.killpg(pid, signal.SIGTERM)
-            except OSError:
-                pass
-            status = None
-            for _ in range(50):
-                wpid, wstatus = os.waitpid(pid, os.WNOHANG)
-                if wpid != 0:
-                    status = wstatus
-                    break
-                time.sleep(0.02)
-            if status is None:
-                try:
-                    os.killpg(pid, signal.SIGKILL)
-                except OSError:
-                    pass
-                _, status = os.waitpid(pid, 0)
-            ctrl_z_terminated = True
-        elif already_reaped:
-            status = reaped_status
-        else:
-            _, status = os.waitpid(pid, 0)
-
-        if interactive:
-            try:
-                os.tcsetpgrp(0, sasha_pgid)
-            except OSError:
-                pass
-            signal.signal(signal.SIGTTOU, old_sigttou)
-            signal.signal(signal.SIGTTIN, old_sigttin)
-            signal.signal(signal.SIGCHLD, old_sigchld)
-            os.close(chld_read)
-            os.close(chld_write)
-
-        if saved_termios is not None:
-            try:
-                termios.tcsetattr(0, termios.TCSADRAIN, saved_termios)
-            except OSError:
-                pass
-
-        os.close(err_master)
-        if out_master is not None:
-            os.close(out_master)
-        os.close(read_fd)
+            # Also runs when an exception escapes the relay loop, so the
+            # terminal and the child are never left behind by a crash.
+            _harvest_and_restore(best_effort=sys.exc_info()[0] is not None)
 
         end = time.monotonic_ns()
         duration_ms = (end - start) // 1_000_000
