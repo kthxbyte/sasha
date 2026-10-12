@@ -47,10 +47,14 @@ def test_ac1_version(env_home):
     # trigger, memory bootstrap + busy-star indicator).
     # Amended by Tier 1 (2026-08-08): version bumped to 0.5.0 for the
     # v0.5.0 tag (Phases 51-61).
+    # Amended by Tier 1 (2026-10-12): version bumped to 0.6.0 — local-model
+    # hardening plus the deletion of the offer/mute economy and of directory
+    # recap. The bump now needs editing only HERE and in test_task_1_1_config.py,
+    # because pyproject resolves the version from sasha.__version__.
     home, env = env_home
     r = _run(env, ["--version"])
     assert r.returncode == 0
-    assert r.stdout.strip() == "sasha 0.5.0"
+    assert r.stdout.strip() == "sasha 0.6.0"
 
 
 # --- AC2 -----------------------------------------------------------------------

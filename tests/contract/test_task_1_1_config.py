@@ -218,6 +218,10 @@ def _subproc_env():
 # burst-join, directory-recap cold-start fallback, the question tool,
 # split stop messages, sasha skill loading, bash-completion
 # default-delegation fallback, YAML block-scalar frontmatter parsing).
+# Amended by Tier 1 (2026-10-12): version bumped to 0.6.0 for a session of
+# local-model hardening and simplification (request gate, crash safety net,
+# `sasha repair`, compact reasoning display, single-sourced version, and the
+# deletion of the offer/mute economy and of directory recap).
 
 def test_ac5_version_flag_prints_version_and_exits_zero():
     r = subprocess.run(
@@ -225,7 +229,7 @@ def test_ac5_version_flag_prints_version_and_exits_zero():
         capture_output=True, text=True, env=_subproc_env(), timeout=30,
     )
     assert r.returncode == 0
-    assert r.stdout.strip() == "sasha 0.5.0"
+    assert r.stdout.strip() == "sasha 0.6.0"
 
 
 def test_ac5_pyproject_declares_packaging():
@@ -250,16 +254,29 @@ def test_ac5_pyproject_declares_packaging():
 
 
 def test_ac5_version_has_one_source_of_truth():
-    """`__version__` and the printed string must agree, and moving the package
-    version must move both."""
+    """`--version` must be DERIVED from `__version__`, not a second literal.
+
+    Amended by Tier 1 (2026-10-12): this test previously asserted the literal
+    "0.5.0" twice, which duplicated test_ac5_version_flag_prints_version_and_exits_zero
+    and would have needed editing on every bump for no extra coverage. It now
+    pins the invariant that actually matters and is bump-proof: whatever
+    `__version__` says is exactly what `--version` prints. The concrete number
+    is still pinned, deliberately, by the two subprocess tests above and in
+    test_task_3_2_entry.py.
+    """
+    import io
+    import contextlib
+
     import sasha
     from sasha.__main__ import main
 
-    assert sasha.__version__ == "0.5.0"
-    assert f"sasha {sasha.__version__}" == "sasha 0.5.0"
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert main(["--version"]) == 0
+    assert buf.getvalue().strip() == f"sasha {sasha.__version__}"
 
 
 def test_ac5_package_version():
     import sasha
 
-    assert sasha.__version__ == "0.5.0"
+    assert sasha.__version__ == "0.6.0"
