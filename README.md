@@ -69,6 +69,10 @@ Other flags: `--config <path>` to use a config file somewhere other than
 of the model's reasoning is shown (see Reasoning display below), `--version`,
 `-h`/`--help`.
 
+`sasha repair` starts a session for working on Sasha itself — see Repair mode
+below. It takes `--bundle <path>` (which crash report to work from) and
+`--repair-profile <name>` (which model to use).
+
 ## Configuration
 
 Sasha reads `~/.config/sasha/config.toml`. On first run, if the file doesn't
@@ -84,6 +88,11 @@ default_profile = "llm7"
 #   "full"              — stream every reasoning chunk, as in earlier versions.
 # Override per session with --reasoning compact|full.
 reasoning_mode = "compact"
+
+# Which profile 'sasha repair' uses. Worth pointing at a frontier model even
+# if you drive day-to-day work on a local one. Empty = reuse the active
+# profile. Override with --repair-profile <name>.
+repair_profile = ""
 
 [profiles.llm7]
 base_url = "https://api.llm7.io/v1"
@@ -623,6 +632,56 @@ An unwritable state directory (read-only `$HOME`, full disk, an unusual
 container) no longer prevents startup either: Sasha falls back to a temporary
 directory for the session and says so, instead of dying before the first
 prompt.
+
+### Repair mode
+
+`sasha repair` starts a session whose job is fixing Sasha itself:
+
+```
+$ sasha repair
+[sasha] repair mode — checkout /home/you/Code/sasha (profile: deepseek, model: deepseek-chat)
+[sasha] git: ada582e — 2 uncommitted change(s)
+[sasha] crash report: ~/.local/state/sasha/crashes/20261012T063712Z-6.txt
+[sasha] edits here change the `sasha` you are running. The test suite is the check: 'bash scripts/run-tests.sh'. Consider a branch.
+```
+
+What's different from a normal session:
+
+- **It runs in the source checkout**, so `read_file`, `grep`, `write_file` and
+  `run_command` all operate on Sasha's own code.
+- **The newest crash report is loaded into the system prompt**, so the session
+  starts already knowing what broke. `--bundle <path>` picks a specific one;
+  with no reports at all it's an ordinary maintenance session.
+- **The model is your `repair_profile`** rather than the active one — see
+  below.
+- **Nothing else changes.** The same tools, and the same confirmation gate:
+  every `write_file` and every non-safe `run_command` still waits for your `y`.
+
+Repair mode does *not* edit anything by itself, and does not commit. You watch,
+you approve, you decide.
+
+#### Pointing repair at a frontier model
+
+Repair is the one job where a weak model is the wrong tool — the traceback is
+the easy part, and editing your own source without breaking it is the hard
+part. So Sasha keeps the model choice separate from the profile you drive
+daily:
+
+```toml
+default_profile = "local"      # day-to-day: your local 26B, free and fast
+repair_profile  = "deepseek"   # 'sasha repair': a frontier model
+```
+
+`repair_profile` is a *setting*, not a profile named "repair" — a profile is an
+endpoint, so `deepseek` stays usable interactively too. Empty (the default)
+means repair reuses whatever profile is active. `--repair-profile <name>`
+overrides the config for one session, and a profile that needs an API key it
+doesn't have will prompt for it, exactly as `sasha profile <name>` does. If you
+cancel that prompt, repair continues on the active profile and warns you why
+that's a bad idea.
+
+Once inside, `sasha profile <name>` still works normally, so you can switch
+models mid-session if a particular fix needs a different one.
 
 ### Loop detection
 

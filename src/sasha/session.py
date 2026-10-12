@@ -35,6 +35,8 @@ class Session:
         self._skills_listing = skills_listing
         self._general_memory_block: str = ""
         self._project_memory_block: str = ""
+        self._repair_brief: str = ""
+        self._repair_crash: str = ""
         self.history: list[dict[str, Any]] = []  # Store message dicts
         self.notes: list[NoteCommand] = []  # Store note_command entries
         self._last_told_cwd: str | None = None
@@ -76,6 +78,11 @@ class Session:
                 f"{self._project_memory_block}")
         if self._skills_listing:
             parts.append(self._skills_listing)
+        if self._repair_brief:
+            parts.append(self._repair_brief)
+        if self._repair_crash:
+            parts.append(
+                f"The crash report you are working from:\n{self._repair_crash}")
         parts.append(functional)
         return "\n\n".join(parts)
 
@@ -88,6 +95,12 @@ class Session:
 
     def set_general_memory(self, text: str) -> None:
         self._general_memory_block = text
+
+    def set_repair_context(self, brief: str, crash: str = "") -> None:
+        """Switch this session's framing to "you are working on Sasha's own
+        source", optionally with the crash report it is repairing."""
+        self._repair_brief = brief
+        self._repair_crash = crash
 
     def note_command(self, line: str, result: ExecResult) -> None:
         self.notes.append(NoteCommand(line, result.exit_code, result.stderr_text))

@@ -49,6 +49,10 @@ class Config:
     sasha_color: str = "bold-cyan"
     reasoning_color: str = "dim-white"
     reasoning_mode: str = "compact"
+    # Which profile `sasha repair` uses. Empty means "the active profile".
+    # Repair is the one job worth a frontier model even when daily driving is
+    # local, so this is a separate setting rather than a second profile.
+    repair_profile: str = ""
     sensitive_paths: tuple[str, ...] = _DEFAULT_SENSITIVE_PATHS
     tool_log_max_size_mb: int = 100
     activity_indicator_enabled: bool = True
@@ -118,6 +122,12 @@ default_profile = "llm7"
 #   "full"              — stream every reasoning chunk, as in earlier versions.
 # Override per session with --reasoning compact|full.
 reasoning_mode = "compact"
+
+# Which profile to use when repairing Sasha itself ('sasha repair'). A
+# frontier model is worth it there even when daily work runs on a local one;
+# the tests are the oracle, and a weak model guesses. Empty means "reuse
+# whichever profile is active". Override with --repair-profile <name>.
+repair_profile = ""
 
 # Free, keyless, streaming — works immediately, best-effort only (no
 # uptime guarantee from the provider). Switch anytime with
@@ -320,6 +330,14 @@ def _build_config(raw: dict, path: pathlib.Path | None,
             f"default_profile '{default_profile_name}' not found in profiles"
         )
 
+    repair_profile = raw.get("repair_profile", "")
+    if not isinstance(repair_profile, str):
+        repair_profile = ""
+    if repair_profile and repair_profile not in profile_fields_by_name:
+        raise ConfigError(
+            f"repair_profile '{repair_profile}' not found in profiles"
+        )
+
     profiles = {}
     for name, pf in profile_fields_by_name.items():
         profiles[name] = Profile(
@@ -338,6 +356,7 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         sasha_color=sasha_color,
         reasoning_color=reasoning_color,
         reasoning_mode=reasoning_mode,
+        repair_profile=repair_profile,
         sensitive_paths=sensitive_paths,
         tool_log_max_size_mb=tool_log_max_size_mb,
         activity_indicator_enabled=activity_indicator_enabled,

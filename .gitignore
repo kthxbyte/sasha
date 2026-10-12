@@ -13,3 +13,6 @@ quarantine/
 sessions.txt
 proposal-personality.md
 scratchpad/
+
+# local dev wrapper (see README: installing sasha for daily use)
+/sasha

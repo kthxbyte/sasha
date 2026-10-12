@@ -266,6 +266,10 @@ class Repl:
             self._handle_recap_builtin()
         elif verb == "reasoning":
             self._handle_reasoning_builtin()
+        elif verb == "repair":
+            self._sink.write_line(
+                "[sasha] 'repair' runs as its own session — exit this one and "
+                "run 'sasha repair' at your shell prompt")
         elif verb == "directory-recap":
             if len(tokens) >= 2:
                 self._handle_directory_recap_toggle(tokens[1])
