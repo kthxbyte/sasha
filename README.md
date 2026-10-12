@@ -65,7 +65,9 @@ first; see Configuration below. `--profile <name>` works with any profile
 you've defined, not just `local`.
 
 Other flags: `--config <path>` to use a config file somewhere other than
-`~/.config/sasha/config.toml`, `--version`, `-h`/`--help`.
+`~/.config/sasha/config.toml`, `--reasoning compact|full` to control how much
+of the model's reasoning is shown (see Reasoning display below), `--version`,
+`-h`/`--help`.
 
 ## Configuration
 
@@ -74,6 +76,14 @@ exist, Sasha writes one for you (and says so, once):
 
 ```toml
 default_profile = "llm7"
+
+# How much of the model's reasoning to show on screen:
+#   "compact" (default) — one line, updated in place, advancing as each
+#                          reasoning paragraph's first line completes. The
+#                          full text stays available via 'sasha reasoning'.
+#   "full"              — stream every reasoning chunk, as in earlier versions.
+# Override per session with --reasoning compact|full.
+reasoning_mode = "compact"
 
 [profiles.llm7]
 base_url = "https://api.llm7.io/v1"
@@ -241,6 +251,39 @@ Auto-consults on exit 127 and syntax errors happen because the line had no
 other purpose — the user wasn't running a real command, so spending tokens is
 appropriate. All other failures are zero-token offers: the user decides whether
 to consult.
+
+### Reasoning display
+
+Models that "think" out loud — most local ones do — produce reasoning text
+several times longer than their actual answer. Sasha shows one line of it by
+default rather than streaming the whole thing into your scrollback:
+
+```
+[sasha] thinking…
+[thinking] The user wants to know which files changed since the last commit.
+Here's what changed since HEAD~1:
+
+  src/sasha/repl.py   |  38 ++++++++++++---
+```
+
+The line is the first line of the model's most recent **completed** reasoning
+paragraph, so it holds still and then advances as the model finishes each
+paragraph — it doesn't flicker with every token. It's dim, capped to one
+terminal width, and when the model starts answering it's settled onto its own
+line and the answer follows normally.
+
+Nothing is thrown away: the full reasoning for the session is kept in memory
+and `sasha reasoning` prints it back. Reasoning beyond the last 200,000
+characters is dropped, and Sasha says so when it prints.
+
+- `--reasoning compact` — the default described above.
+- `--reasoning full` — the older behaviour: stream every reasoning chunk as it
+  arrives, dim, interleaved with the answer.
+- `reasoning_mode` in `config.toml` sets the session default; the flag wins
+  over it.
+
+If the model doesn't expose reasoning at all (most hosted APIs don't), none of
+this appears and the answer streams as usual.
 
 ### Directory recap
 
@@ -503,6 +546,9 @@ From then on, that command failing with that exit code produces no offer.
   first; nothing is deleted on any answer other than `yes`.
 - `sasha recap` — explicit, synchronous, always-via-LLM directory recap
   for the current directory — see Directory recap above.
+- `sasha reasoning` — print back everything the model has reasoned this
+  session, including the parts the default one-line display didn't show —
+  see Reasoning display above.
 - `sasha directory-recap on|off` — toggle the *passive* on-`cd` recap
   check (on by default) — see Directory recap above.
 - `sasha compact-log` — manually strip stored results out of

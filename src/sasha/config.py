@@ -27,6 +27,11 @@ class Limits:
     mute_threshold: int = 3
 
 
+# How much of the model's reasoning the terminal shows. "compact" draws one
+# line that advances as each reasoning paragraph's first line completes;
+# "full" streams every chunk (the previous behaviour).
+_REASONING_MODES: frozenset[str] = frozenset({"compact", "full"})
+
 _DEFAULT_SENSITIVE_PATHS: tuple[str, ...] = (
     "~/.ssh/**", "/etc/passwd", "/etc/shadow*", "/etc/sudoers*",
     "~/.aws/**", "~/.gnupg/**", "~/.kube/**", "~/.config/gcloud/**",
@@ -43,6 +48,7 @@ class Config:
     prompt: str = prompt.DEFAULT_TEMPLATE
     sasha_color: str = "bold-cyan"
     reasoning_color: str = "dim-white"
+    reasoning_mode: str = "compact"
     sensitive_paths: tuple[str, ...] = _DEFAULT_SENSITIVE_PATHS
     tool_log_max_size_mb: int = 100
     activity_indicator_enabled: bool = True
@@ -104,6 +110,14 @@ _DEFAULT_CONFIG_TOML = """\
 # Sasha config — generated on first run. Edit freely; re-running Sasha
 # never overwrites this file. See README for the full option reference.
 default_profile = "llm7"
+
+# How much of the model's reasoning to show on screen:
+#   "compact" (default) — one line, updated in place, advancing as each
+#                          reasoning paragraph's first line completes. The
+#                          full text stays available via 'sasha reasoning'.
+#   "full"              — stream every reasoning chunk, as in earlier versions.
+# Override per session with --reasoning compact|full.
+reasoning_mode = "compact"
 
 # Free, keyless, streaming — works immediately, best-effort only (no
 # uptime guarantee from the provider). Switch anytime with
@@ -227,6 +241,12 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         raise ConfigError(
             f"invalid reasoning_color '{reasoning_color}' — valid tokens: {valid}")
 
+    reasoning_mode = raw.get("reasoning_mode", "compact")
+    if not isinstance(reasoning_mode, str) or reasoning_mode not in _REASONING_MODES:
+        valid = ", ".join(sorted(_REASONING_MODES))
+        raise ConfigError(
+            f"invalid reasoning_mode '{reasoning_mode}' — valid: {valid}")
+
     profile_fields_by_name = _build_default_profiles()
 
     for name, table in raw.get("profiles", {}).items():
@@ -317,6 +337,7 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         prompt=prompt_template,
         sasha_color=sasha_color,
         reasoning_color=reasoning_color,
+        reasoning_mode=reasoning_mode,
         sensitive_paths=sensitive_paths,
         tool_log_max_size_mb=tool_log_max_size_mb,
         activity_indicator_enabled=activity_indicator_enabled,

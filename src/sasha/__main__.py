@@ -41,6 +41,12 @@ def _state_dir() -> pathlib.Path:
     return pathlib.Path.home() / ".local" / "state" / "sasha"
 
 
+def _resolve_reasoning_mode(cli_value: str | None, config) -> str:
+    """The --reasoning flag wins over config.toml; config wins over the
+    built-in default (already applied by the Config dataclass)."""
+    return cli_value or config.reasoning_mode
+
+
 def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
@@ -49,6 +55,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--version", action="store_true")
     parser.add_argument("--config", type=pathlib.Path, default=None)
     parser.add_argument("--profile", type=str, default=None)
+    parser.add_argument("--reasoning", choices=("compact", "full"), default=None,
+                        help="how much of the model's reasoning to show: "
+                             "'compact' (default) draws one line that advances "
+                             "as each reasoning paragraph's first line "
+                             "completes; 'full' streams every chunk. Overrides "
+                             "reasoning_mode in config.toml.")
     args = parser.parse_args(argv)
 
     if args.version:
@@ -94,7 +106,9 @@ def main(argv: list[str] | None = None) -> int:
     client_factory = lambda p: ChatClient(p)
 
     sink = TerminalSink(sasha_color=prompt_mod.COLOR_TOKENS[config.sasha_color],
-                        reasoning_color=prompt_mod.COLOR_TOKENS[config.reasoning_color])
+                        reasoning_color=prompt_mod.COLOR_TOKENS[config.reasoning_color],
+                        reasoning_mode=_resolve_reasoning_mode(args.reasoning,
+                                                              config))
 
     if personality_result.notice:
         sink.write_line(personality_result.notice)

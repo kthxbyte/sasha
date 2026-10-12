@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 import shlex
+import shutil
 import socket
 import sys
 import threading
@@ -188,6 +189,8 @@ class Repl:
             self._handle_compact_log_builtin()
         elif verb == "recap":
             self._handle_recap_builtin()
+        elif verb == "reasoning":
+            self._handle_reasoning_builtin()
         elif verb == "directory-recap":
             if len(tokens) >= 2:
                 self._handle_directory_recap_toggle(tokens[1])
@@ -200,6 +203,7 @@ class Repl:
                       "sasha memory, sasha forget, "
                       "sasha compact-log, "
                       "sasha recap, sasha directory-recap on|off, "
+                      "sasha reasoning, "
                       "?? <question>")
         else:
             self._sink.write_line(f"[sasha] unknown command: {rest}")
@@ -263,6 +267,19 @@ class Repl:
             self._sink.write_line(
                 f"[sasha] still {after_mb:.1f} MB even with all results "
                 f"stripped — consider deleting or archiving it")
+
+    def _handle_reasoning_builtin(self):
+        getter = getattr(self._sink, "reasoning_text", None)
+        text = getter() if getter is not None else ""
+        if not text.strip():
+            self._sink.write_line(
+                "[sasha] no reasoning recorded this session")
+            return
+        if getattr(self._sink, "reasoning_truncated", False):
+            self._sink.write_line(
+                "[sasha] earlier reasoning dropped — showing the tail")
+        for line in text.splitlines():
+            self._sink.write_line(line, color=_REASONING_COLOR)
 
     def _handle_recap_builtin(self):
         cwd = self._executor.cwd
@@ -767,16 +784,72 @@ _RESET = "\x1b[0m"
 _RL_IGNORE_START = "\001"
 _RL_IGNORE_END = "\002"
 
+# Compact ("one line") reasoning display, mirroring the mechanism DSH's own
+# ReasoningRow uses: the visible line is the first line of the most recent
+# *completed* reasoning paragraph, so it holds still and then advances, rather
+# than trailing every token as it streams.
+_THINKING_PREFIX = "[thinking] "
+_CLEAR_LINE = "\r\x1b[2K"
+_MAX_REASONING_LOG_CHARS = 200_000
+
+_PARA_SEPARATOR = re.compile(r"\r?\n(?:[\t ]*\r?\n)+")
+
+
+def _first_line(text: str) -> str:
+    newline = text.find("\n")
+    return text if newline == -1 else text[:newline]
+
+
+def _latest_completed_paragraph_first_line(text: str) -> str:
+    """First line of the last blank-line-separated paragraph whose own first
+    line has already completed; '' while the in-flight paragraph is still
+    unterminated.
+
+    Direct port of DSH's latestCompletedParagraphFirstLine (see
+    dsh-client-ui-chat/lib/client.js, ReasoningRow).
+    """
+    summary = ""
+    paragraph_start = 0
+    while True:
+        match = _PARA_SEPARATOR.search(text, paragraph_start)
+        if match is None:
+            paragraph_end = len(text)
+        else:
+            paragraph_end = match.start() + match.group(0).index("\n")
+        newline = text.find("\n", paragraph_start)
+        if newline != -1 and newline <= paragraph_end:
+            candidate = text[paragraph_start:newline].strip()
+            if candidate:
+                summary = candidate
+        if match is None:
+            return summary
+        paragraph_start = match.end()
+
 
 class TerminalSink:
     def __init__(self, sasha_color: str = _SASHA_COLOR,
-                 reasoning_color: str = _REASONING_COLOR) -> None:
+                 reasoning_color: str = _REASONING_COLOR,
+                 reasoning_mode: str = "full") -> None:
         self.color_enabled = (sys.stdout.isatty()
                               and "NO_COLOR" not in os.environ)
         self._sasha_color = sasha_color
         self._reasoning_color = reasoning_color
+        # "full" is the library default so a bare TerminalSink() keeps the
+        # long-standing streaming behaviour (and its contract tests). The
+        # product default, "compact", is applied by __main__ from config,
+        # where the user can see and override it.
+        self.reasoning_mode = reasoning_mode
+        self._interactive = sys.stdout.isatty()
         self._ends_in_newline = True
         self._chunk_run_kind = None   # None | "llm" | "reasoning"
+        # compact-mode preview state
+        self._reasoning_buf = ""
+        self._preview_text = ""
+        self._preview_shown = False
+        # session-wide retention, so compact mode stays recoverable
+        self._reasoning_log = ""
+        self._reasoning_block_open = False
+        self.reasoning_truncated = False
 
     def _wrap(self, text: str, color: str) -> str:
         if not self.color_enabled:
@@ -789,6 +862,8 @@ class TerminalSink:
             self._chunk_run_kind = None
 
     def write_line(self, text: str, color: str | None = None) -> None:
+        self._finish_reasoning_preview()
+        self._reasoning_block_open = False
         self._close_chunk_run()
         if not self._ends_in_newline:
             sys.stdout.write("\n")
@@ -802,6 +877,8 @@ class TerminalSink:
         bypassing this sink, so _ends_in_newline can't be trusted to know
         whether the terminal is actually at a fresh line. Always writes a
         leading newline unconditionally rather than checking that state."""
+        self._finish_reasoning_preview()
+        self._reasoning_block_open = False
         self._close_chunk_run()
         sys.stdout.write("\n")
         print(self._wrap(text, color if color is not None else self._sasha_color))
@@ -825,12 +902,88 @@ class TerminalSink:
         self._ends_in_newline = text.endswith("\n")
 
     def write_chunk(self, text: str) -> None:
+        if self.reasoning_mode == "compact" and self._reasoning_buf:
+            self._finish_reasoning_preview()
+        self._reasoning_block_open = False
         self._write_colored_chunk(text, "llm", _LLM_COLOR)
 
+    # -- reasoning display -------------------------------------------------
+
+    def _retain_reasoning(self, text: str) -> None:
+        """Keep this session's reasoning in memory so compact mode is a
+        display choice, not a loss — 'sasha reasoning' prints it back."""
+        self._reasoning_log += text
+        if len(self._reasoning_log) > _MAX_REASONING_LOG_CHARS:
+            self._reasoning_log = self._reasoning_log[-_MAX_REASONING_LOG_CHARS:]
+            self.reasoning_truncated = True
+
+    def reasoning_text(self) -> str:
+        """Everything the model has reasoned this session (a capped tail)."""
+        return self._reasoning_log
+
+    def _preview_line(self, summary: str) -> str:
+        columns = shutil.get_terminal_size((80, 24)).columns
+        available = max(1, columns - len(_THINKING_PREFIX) - 1)
+        if len(summary) > available:
+            summary = summary[:max(0, available - 1)] + "\u2026"
+        return self._wrap(_THINKING_PREFIX + summary, self._reasoning_color)
+
+    def _draw_preview(self, summary: str) -> None:
+        if self._preview_shown:
+            sys.stdout.write(_CLEAR_LINE)
+        sys.stdout.write(self._preview_line(summary))
+        sys.stdout.flush()
+        self._preview_shown = True
+        self._preview_text = summary
+        self._ends_in_newline = False
+
+    def _finish_reasoning_preview(self) -> None:
+        """Settle the one-line preview and break the line, so what stays in
+        scrollback is exactly one dim line rather than the whole reasoning."""
+        if self.reasoning_mode != "compact" or not self._reasoning_buf:
+            return
+        summary = (_latest_completed_paragraph_first_line(self._reasoning_buf)
+                   or _first_line(self._reasoning_buf))
+        if self._interactive:
+            if not (self._preview_shown and summary == self._preview_text):
+                self._draw_preview(summary)
+        else:
+            # Never drawn incrementally off a tty; emit the settled line once.
+            sys.stdout.write(self._preview_line(summary))
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        self._preview_shown = False
+        self._preview_text = ""
+        self._reasoning_buf = ""
+        self._reasoning_block_open = False
+        self._ends_in_newline = True
+
     def write_reasoning_chunk(self, text: str) -> None:
-        self._write_colored_chunk(text, "reasoning", self._reasoning_color)
+        if not text:
+            return
+        if not self._reasoning_block_open and self._reasoning_log:
+            self._reasoning_log += "\n"
+        self._reasoning_block_open = True
+        self._retain_reasoning(text)
+        if self.reasoning_mode != "compact":
+            self._write_colored_chunk(text, "reasoning", self._reasoning_color)
+            return
+        if self._chunk_run_kind is not None:
+            # A content run was still open; the preview needs its own line.
+            self._close_chunk_run()
+            if not self._ends_in_newline:
+                sys.stdout.write("\n")
+                self._ends_in_newline = True
+        self._reasoning_buf += text
+        if not self._interactive:
+            return
+        summary = _latest_completed_paragraph_first_line(self._reasoning_buf)
+        if summary and summary != self._preview_text:
+            self._draw_preview(summary)
 
     def ensure_newline(self) -> None:
+        self._finish_reasoning_preview()
+        self._reasoning_block_open = False
         self._close_chunk_run()
         if not self._ends_in_newline:
             sys.stdout.write("\n")
