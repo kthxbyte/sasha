@@ -43,23 +43,6 @@ class SpyExecutor:
         return self._mk(self.next_exit)
 
 
-class SpyMutes:
-    def is_muted(self, command, exit_code):
-        return False
-
-    def record_ignored(self, command, exit_code):
-        return False
-
-    def record_acted(self, command, exit_code):
-        pass
-
-    def mute(self, command, exit_code=None):
-        pass
-
-    def unmute(self, command, exit_code=None):
-        pass
-
-
 class ScriptedConfirmer:
     def ask(self, command, description):
         return ("no", "")
@@ -96,13 +79,12 @@ def _repl(stub_url):
     config = Config(default_profile="stubprof", profiles=profiles,
                     limits=Limits())
     executor = SpyExecutor()
-    mutes = SpyMutes()
     out_chunks = []
 
     def client_factory(profile):
         return ChatClient(profile, timeout_s=10.0)
 
-    repl = Repl(config, executor, mutes, Session(), client_factory,
+    repl = Repl(config, executor, Session(), client_factory,
                 ScriptedConfirmer(), lambda prompt: "", SpySink(out_chunks))
     return repl, executor, out_chunks
 

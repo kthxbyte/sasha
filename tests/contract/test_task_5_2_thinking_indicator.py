@@ -44,23 +44,6 @@ class SpyExecutor:
         return self._mk(self.next_exit)
 
 
-class SpyMutes:
-    def is_muted(self, command, exit_code):
-        return False
-
-    def record_ignored(self, command, exit_code):
-        return False
-
-    def record_acted(self, command, exit_code):
-        pass
-
-    def mute(self, command, exit_code=None):
-        pass
-
-    def unmute(self, command, exit_code=None):
-        pass
-
-
 class ScriptedConfirmer:
     def ask(self, command, description):
         return ("no", "")
@@ -97,13 +80,12 @@ def _repl(stub_url):
     config = Config(default_profile="stubprof", profiles=profiles,
                     limits=Limits())
     executor = SpyExecutor()
-    mutes = SpyMutes()
     out_chunks = []
 
     def client_factory(profile):
         return ChatClient(profile, timeout_s=10.0)
 
-    repl = Repl(config, executor, mutes, Session(), client_factory,
+    repl = Repl(config, executor, Session(), client_factory,
                 ScriptedConfirmer(), lambda prompt: "", SpySink(out_chunks))
     return repl, executor, out_chunks
 
@@ -145,11 +127,11 @@ def test_ac3_indicator_on_every_consult_path():
         repl.run_once("550*11")
     assert out.count(INDICATOR) == 1
 
-    # c. empty-Enter offer-accept
+    # c. any non-zero exit (the OFFER path it used to exercise is gone --
+    #    amended by Tier 1 2026-10-12 for the trigger-economy inversion,
+    #    ISSUE-067)
     with StubServer([{"kind": "text", "text": "answer three"}]) as stub:
         repl, executor, out = _repl(stub.base_url)
         executor.next_exit = 3
-        repl.run_once("badcmd --flag")   # OFFER, zero tokens so far
-        assert INDICATOR not in out
-        repl.run_once("")                # accept
+        repl.run_once("badcmd --flag")   # consults at once
     assert out.count(INDICATOR) == 1

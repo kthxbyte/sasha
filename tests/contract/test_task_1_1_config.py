@@ -61,7 +61,9 @@ def test_ac1_default_limits(isolated_env):
     assert lim.history_tokens == 12000
     assert lim.stderr_capture_bytes == 8192
     assert lim.max_tool_turns == 10
-    assert lim.mute_threshold == 3
+    # Amended by Tier 1 (2026-10-12): `mute_threshold` was removed with the
+    # trigger-economy inversion (ISSUE-067) — there are no offers to mute.
+    assert not hasattr(lim, "mute_threshold")
 
 
 def test_ac1_profile_dataclass_frozen(isolated_env):

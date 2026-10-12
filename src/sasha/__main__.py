@@ -19,7 +19,6 @@ from sasha import tool_log
 from sasha.config import ConfigError, load
 from sasha.executor import Executor
 from sasha.llm import ChatClient
-from sasha.mutes import MuteStore
 from sasha.repl import Repl, TerminalConfirmer, TerminalQuestioner, TerminalSink
 from sasha.session import Session
 
@@ -206,15 +205,15 @@ def _run(args, repair_mode: bool = False) -> int:
     except OSError as exc:
         # An unwritable $HOME (read-only home, full disk, container) must not
         # stop Sasha from starting: running commands needs no state at all.
-        # Fall back to a private temp dir so mutes/history/reports still work
+        # Fall back to a private temp dir so history/reports still work
         # for this session, and say so rather than dying with a raw traceback.
         original = state_dir
         try:
             state_dir = pathlib.Path(tempfile.mkdtemp(prefix="sasha-state-"))
         except OSError:
-            # Nothing writable anywhere. Keep the unusable path: mutes.py
-            # already tolerates an unreadable store on read, and a failed
-            # write is caught by the REPL's crash net.
+            # Nothing writable anywhere. Keep the unusable path: reads
+            # already degrade to defaults, and a failed write is caught by
+            # the REPL's crash net.
             state_dir = original
         reason = exc.strerror or str(exc)
         state_notice = (f"[sasha] can't use {original} ({reason}) — "
@@ -239,8 +238,6 @@ def _run(args, repair_mode: bool = False) -> int:
         if len(repair_crash) > _REPAIR_CRASH_MAX_CHARS:
             repair_crash = (repair_crash[:_REPAIR_CRASH_MAX_CHARS]
                             + "\n... [report truncated]\n")
-
-    mutes = MuteStore(state_dir / "mutes.json", threshold=limits.mute_threshold)
 
     personality_result = personality.load_personality()
     skills_listing = skills.build_skills_listing()
@@ -282,7 +279,6 @@ def _run(args, repair_mode: bool = False) -> int:
     repl = Repl(
         config=config,
         executor=executor,
-        mutes=mutes,
         session=session,
         client_factory=client_factory,
         confirmer=confirmer,
@@ -336,7 +332,7 @@ def _run(args, repair_mode: bool = False) -> int:
                     text, os.environ.get("PATH", "").split(os.pathsep))
             else:
                 builtin = completion.complete_builtin_arg(
-                    words, cword, list(config.profiles), mutes.muted_commands())
+                    words, cword, list(config.profiles))
                 if builtin is not None:
                     _last_matches = builtin
                 elif _bash_ok:

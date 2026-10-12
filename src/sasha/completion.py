@@ -7,7 +7,7 @@ import subprocess
 
 _DEFAULT_COMPLETION_SENTINEL = "__SASHA_DEFAULT_COMPLETION__"
 
-_VERBS = ["help", "mute", "profile", "unmute"]
+_VERBS = ["help", "profile"]
 
 
 def complete_first_word(prefix: str, path_dirs: list[str]) -> list[str]:
@@ -26,8 +26,8 @@ def complete_first_word(prefix: str, path_dirs: list[str]) -> list[str]:
     return sorted(matches)
 
 
-def complete_builtin_arg(words: list[str], cword: int, profile_names: list[str],
-                         muted_commands: list[str]) -> list[str] | None:
+def complete_builtin_arg(words: list[str], cword: int,
+                         profile_names: list[str]) -> list[str] | None:
     if not words or words[0] != "sasha":
         return None
     prefix = words[cword] if cword < len(words) else ""
@@ -36,8 +36,6 @@ def complete_builtin_arg(words: list[str], cword: int, profile_names: list[str],
     if cword == 2:
         if words[1] == "profile":
             return [p for p in profile_names if p.startswith(prefix)]
-        if words[1] == "unmute":
-            return [c for c in muted_commands if c.startswith(prefix)]
         return None
     return None
 

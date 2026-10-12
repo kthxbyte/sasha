@@ -239,23 +239,6 @@ class FakeExecutor:
                                 stdout_text="", cwd_after=self._cwd, duration_ms=1)
 
 
-class SpyMutes:
-    def is_muted(self, command, exit_code):
-        return False
-
-    def record_ignored(self, command, exit_code):
-        return False
-
-    def record_acted(self, command, exit_code):
-        pass
-
-    def mute(self, command, exit_code=None):
-        pass
-
-    def unmute(self, command, exit_code=None):
-        pass
-
-
 class ScriptedReplConfirmer:
     def ask(self, command, description):
         return ("no", "")
@@ -300,7 +283,7 @@ def _repl(cwd, color_enabled=True, activity_enabled=True):
                      activity_indicator_enabled=activity_enabled)
     executor = FakeExecutor(cwd)
     sink = SpySink(color_enabled=color_enabled)
-    repl = Repl(config, executor, SpyMutes(), Session(),
+    repl = Repl(config, executor, Session(),
                 lambda p: ChatClient(p, timeout_s=10.0), ScriptedReplConfirmer(),
                 lambda prompt: "", sink)
     return repl, executor, sink

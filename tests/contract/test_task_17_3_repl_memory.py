@@ -136,23 +136,6 @@ class FakeExecutor:
         return result
 
 
-class SpyMutes:
-    def is_muted(self, command, exit_code):
-        return False
-
-    def record_ignored(self, command, exit_code):
-        return False
-
-    def record_acted(self, command, exit_code):
-        pass
-
-    def mute(self, command, exit_code=None):
-        pass
-
-    def unmute(self, command, exit_code=None):
-        pass
-
-
 class ScriptedConfirmer:
     def ask(self, command, description):
         return ("no", "")
@@ -187,7 +170,7 @@ def _repl(cwd, stub_url=None, input_fn=None):
                      profiles={"stubprof": profile}, limits=Limits())
     executor = FakeExecutor(cwd)
     sink = SpySink()
-    repl = Repl(config, executor, SpyMutes(), Session(),
+    repl = Repl(config, executor, Session(),
                 lambda p: ChatClient(p, timeout_s=10.0), ScriptedConfirmer(),
                 input_fn or (lambda prompt: ""), sink)
     return repl, executor, sink
@@ -431,10 +414,13 @@ def test_ac_sasha_forget_nothing_to_forget(tmp_path):
 
 
 def test_ac_help_still_mentions_mute_profile_ask():
+    # Amended by Tier 1 (2026-10-12): the mute/unmute builtins were removed
+    # with the trigger-economy inversion (ISSUE-067); help now lists profile
+    # and the ?? prefix, which is what this test is really pinning.
     repl, executor, sink = _repl("/tmp")
     repl.run_once("sasha help")
-    assert any(("mute" in l and "profile" in l and "??" in l)
-               for l in sink.lines)
+    assert any(("profile" in l and "??" in l) for l in sink.lines)
+    assert not any("sasha mute" in l for l in sink.lines)
 
 
 # --- AC: remember-tool-triggered creation notice, via a real consult --------------

@@ -330,14 +330,6 @@ class _FakeConfirmer:
         return ("no", "")
 
 
-class _FakeMutes:
-    def is_muted(self, command, exit_code):
-        return False
-
-    def muted_commands(self):
-        return []
-
-
 def _make_repl(tmp_path):
     from sasha.config import Config, Limits, Profile
     from sasha.executor import Executor
@@ -349,7 +341,7 @@ def _make_repl(tmp_path):
                      limits=Limits())
     executor = Executor(str(tmp_path), {})
     session = Session()
-    return Repl(config=config, executor=executor, mutes=_FakeMutes(),
+    return Repl(config=config, executor=executor,
                 session=session, client_factory=lambda p: None,
                 confirmer=_FakeConfirmer(), input_fn=lambda p: "",
                 sink=_FakeSink())

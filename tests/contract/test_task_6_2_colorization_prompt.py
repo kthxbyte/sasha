@@ -137,7 +137,7 @@ def _repl_for_prompt(sink, cwd="/home/testuser/project"):
     profiles = {"p": Profile(name="p", base_url="http://unused", model="m", api_key="")}
     config = Config(default_profile="p", profiles=profiles, limits=Limits())
     input_fn = _EOFInput()
-    repl = Repl(config, _CwdExecutor(cwd), None, Session(), lambda p: None,
+    repl = Repl(config, _CwdExecutor(cwd), Session(), lambda p: None,
                 None, input_fn, sink)
     return repl, input_fn
 

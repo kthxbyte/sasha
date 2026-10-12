@@ -38,23 +38,6 @@ class SpyExecutor:
         return self._result
 
 
-class NullMutes:
-    def is_muted(self, command, exit_code):
-        return False
-
-    def record_ignored(self, command, exit_code):
-        return False
-
-    def record_acted(self, command, exit_code):
-        pass
-
-    def mute(self, command, exit_code=None):
-        pass
-
-    def unmute(self, command, exit_code=None):
-        pass
-
-
 class SpySink:
     """Sink test double (Task 6.1) — tags entries "line" (write_line, e.g.
     the Task 5.2 thinking indicator) vs "chunk" (write_chunk, streamed LLM
@@ -96,7 +79,7 @@ def _repl(stub_url, events):
                       model="stub-model", api_key="")
     config = Config(default_profile="stubprof",
                     profiles={"stubprof": profile}, limits=Limits())
-    return Repl(config, SpyExecutor(), NullMutes(), Session(),
+    return Repl(config, SpyExecutor(), Session(),
                 lambda p: ChatClient(p, timeout_s=10.0), LoggingConfirmer(),
                 lambda prompt: "", SpySink(events))
 

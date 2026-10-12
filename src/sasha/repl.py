@@ -21,7 +21,7 @@ from sasha import guard
 from sasha import memory
 from sasha import safe_commands
 from sasha import tool_log
-from sasha.triggers import Decision, command_word, decide
+from sasha.triggers import Decision, decide
 import sasha.prompt as prompt_mod
 
 
@@ -56,12 +56,11 @@ def _boot_api_line(profile):
 
 
 class Repl:
-    def __init__(self, config, executor, mutes, session, client_factory,
+    def __init__(self, config, executor, session, client_factory,
                  confirmer, input_fn, sink, getpass_fn=getpass.getpass,
                  questioner=None, state_dir=None, breaker=None):
         self._config = config
         self._executor = executor
-        self._mutes = mutes
         self._session = session
         self._client_factory = client_factory
         self._confirmer = confirmer
@@ -81,7 +80,6 @@ class Repl:
             interval_s=config.activity_indicator_interval_s,
             enabled=config.activity_indicator_enabled and sink.color_enabled,
         )
-        self._pending_offer = None  # (line, exit_code) or None
         self._current_repo_root = None   # pathlib.Path | None
         self._last_checked_cwd = None    # str | None
         self._memory_dir_existed = False
@@ -204,17 +202,6 @@ class Repl:
             "[sasha] this session is still alive — press Enter to continue")
         return True
 
-    def _handle_pending_offer_ignore(self):
-        if self._pending_offer is not None:
-            off_line, off_exit = self._pending_offer
-            cmd = command_word(off_line)
-            crossed = self._mutes.record_ignored(cmd, off_exit)
-            if crossed:
-                self._sink.write_line(f"[sasha] muting offers for {cmd} "
-                          f"exit {off_exit} — "
-                          f"'sasha unmute {cmd}' to restore")
-            self._pending_offer = None
-
     def _handle_builtin(self, stripped):
         rest = stripped[6:]
         try:
@@ -228,29 +215,7 @@ class Repl:
 
         verb = tokens[0]
 
-        if verb == "mute":
-            if len(tokens) >= 2:
-                cmd = tokens[1]
-                if len(tokens) >= 3:
-                    try:
-                        n = int(tokens[2])
-                        self._mutes.mute(cmd, n)
-                    except ValueError:
-                        self._sink.write_line(f"[sasha] unknown command: {rest}")
-                else:
-                    self._mutes.mute(cmd, None)
-        elif verb == "unmute":
-            if len(tokens) >= 2:
-                cmd = tokens[1]
-                if len(tokens) >= 3:
-                    try:
-                        n = int(tokens[2])
-                        self._mutes.unmute(cmd, n)
-                    except ValueError:
-                        self._sink.write_line(f"[sasha] unknown command: {rest}")
-                else:
-                    self._mutes.unmute(cmd, None)
-        elif verb == "profile":
+        if verb == "profile":
             if len(tokens) == 1:
                 p = self._current_profile
                 self._sink.write_line(_profile_line(p))
@@ -276,9 +241,8 @@ class Repl:
             else:
                 self._sink.write_line(f"[sasha] unknown command: {rest}")
         elif verb == "help":
-            self._sink.write_line("[sasha] sasha mute <cmd> [<N>], "
-                      "sasha unmute <cmd>, "
-                      "sasha profile [<name>] (asks for a key if needed), "
+            self._sink.write_line("[sasha] sasha profile [<name>] "
+                      "(asks for a key if needed), "
                       "sasha memory, sasha forget, "
                       "sasha compact-log, "
                       "sasha recap, sasha directory-recap on|off, "
@@ -612,36 +576,22 @@ class Repl:
     def run_once(self, line):
         stripped = line.strip()
 
-        # a. empty + offer pending → consult about the offered failure
+        # a. empty line → nothing to do
         if not stripped:
-            if self._pending_offer is not None:
-                off_line, off_exit = self._pending_offer
-                self._mutes.record_acted(command_word(off_line), off_exit)
-                self._pending_offer = None
-                prompt = (f"The command `{off_line}` failed with exit "
-                          f"{off_exit}. Explain the failure using the "
-                          f"captured stderr and suggest a fix.")
-                self._consult(prompt)
-                return True
-            # b. empty, no offer → do nothing
             return True
 
-        # c. ?? <text> → consult (executor untouched)
+        # b. ?? <text> → consult (executor untouched)
         if stripped.startswith("?? "):
             text = stripped[3:].strip()
-            self._pending_offer = None
             self._session.add_user(text)
             self._consult()
             return True
 
-        # d. sasha <builtin>
+        # c. sasha <builtin>
         if stripped.startswith("sasha "):
-            self._handle_pending_offer_ignore()
             return self._handle_builtin(stripped)
 
-        # e. otherwise
-        self._handle_pending_offer_ignore()
-
+        # d. otherwise
         if stripped in ("exit", "quit"):
             return False
 
@@ -685,13 +635,8 @@ class Repl:
         self._check_crash(stripped, result)
         self._check_memory_created()
 
-        decision = decide(stripped, result, self._mutes)
-        if decision == Decision.AUTO_CONSULT:
+        if decide(result) == Decision.AUTO_CONSULT:
             self._consult()
-        elif decision == Decision.OFFER:
-            self._sink.write_line(f"[sasha] failed (exit {result.exit_code}) "
-                      f"— press Enter to ask")
-            self._pending_offer = (stripped, result.exit_code)
 
         return True
 

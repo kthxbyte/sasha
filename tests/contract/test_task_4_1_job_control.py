@@ -160,17 +160,6 @@ class _SpyExecutor:
         return self._result
 
 
-class _SpyMutes:
-    def is_muted(self, command, exit_code):
-        return False
-
-    def record_ignored(self, command, exit_code):
-        raise AssertionError("trigger engine must not run for a ctrl_z_terminated result")
-
-    def record_acted(self, command, exit_code):
-        raise AssertionError("trigger engine must not run for a ctrl_z_terminated result")
-
-
 class _SpySink:
     """Sink test double (Task 6.1) — no coloring, raw text captured."""
 
@@ -200,12 +189,11 @@ def test_ac5_repl_prints_ctrl_z_message_and_skips_triggers():
     result = ExecResult(exit_code=143, signal=15, stderr_text="", stdout_text="",
                         cwd_after="/spy", duration_ms=1, ctrl_z_terminated=True)
     executor = _SpyExecutor(result)
-    mutes = _SpyMutes()
     out_lines = []
     profiles = {"p": Profile(name="p", base_url="http://unused", model="m", api_key="")}
     config = Config(default_profile="p", profiles=profiles, limits=Limits())
 
-    repl = Repl(config, executor, mutes, Session(), lambda profile: None,
+    repl = Repl(config, executor, Session(), lambda profile: None,
                 None, lambda prompt: "", _SpySink(out_lines))
 
     cont = repl.run_once("sleep 30")

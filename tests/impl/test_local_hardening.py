@@ -313,7 +313,7 @@ def test_loop_continues_after_keyboard_interrupt_inside_run_once(
         except StopIteration:
             raise EOFError
 
-    repl = Repl(cfg, _Executor(str(tmp_path)), None,
+    repl = Repl(cfg, _Executor(str(tmp_path)),
                 Session(cfg.limits.history_tokens),
                 client_factory=lambda p: None, confirmer=None,
                 input_fn=input_fn, sink=sink)
@@ -344,8 +344,7 @@ def test_self_installed_config_writes_limits(monkeypatch, tmp_path):
     text = cfg.path.read_text()
 
     assert "[limits]" in text
-    for key in ("history_tokens", "stderr_capture_bytes",
-                "max_tool_turns", "mute_threshold"):
+    for key in ("history_tokens", "stderr_capture_bytes", "max_tool_turns"):
         assert key in text
 
 

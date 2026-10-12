@@ -119,23 +119,6 @@ class FakeExecutor:
         return self._cwd
 
 
-class SpyMutes:
-    def is_muted(self, command, exit_code):
-        return False
-
-    def record_ignored(self, command, exit_code):
-        return False
-
-    def record_acted(self, command, exit_code):
-        pass
-
-    def mute(self, command, exit_code=None):
-        pass
-
-    def unmute(self, command, exit_code=None):
-        pass
-
-
 class SpySink:
     color_enabled = False
 
@@ -170,7 +153,7 @@ def _repl(cwd, stub_url=None, directory_recap_enabled=True, config_path=None):
                  path=config_path)
     executor = FakeExecutor(cwd)
     sink = SpySink()
-    repl = Repl(cfg, executor, SpyMutes(), Session(),
+    repl = Repl(cfg, executor, Session(),
                 lambda p: ChatClient(p, timeout_s=10.0), None,
                 lambda prompt: "", sink)
     return repl, executor, sink

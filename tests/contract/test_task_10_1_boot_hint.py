@@ -54,7 +54,7 @@ def _repl(events, cwd="/home/testuser"):
                      limits=Limits())
     sink = _SpySink(events)
     input_fn = _EOFInput(events)
-    repl = Repl(config, _CwdExecutor(cwd), None, Session(), lambda p: None,
+    repl = Repl(config, _CwdExecutor(cwd), Session(), lambda p: None,
                 None, input_fn, sink)
     return repl
 
@@ -131,7 +131,7 @@ def test_ac4_profile_verb_no_args_unchanged():
     config = Config(default_profile="stubprof", profiles=profiles,
                      limits=Limits())
     sink = _SpySink(events)
-    repl = Repl(config, _CwdExecutor("/tmp"), None, Session(),
+    repl = Repl(config, _CwdExecutor("/tmp"), Session(),
                 lambda p: None, None, lambda prompt: "", sink)
 
     repl.run_once("sasha profile")
@@ -158,7 +158,7 @@ def test_ac4_profile_verb_switch_unchanged():
     config = Config(default_profile="stubprof", profiles=profiles,
                      limits=Limits())
     sink = _SpySink(events)
-    repl = Repl(config, _CwdExecutor("/tmp"), None, Session(),
+    repl = Repl(config, _CwdExecutor("/tmp"), Session(),
                 lambda p: None, None, lambda prompt: "", sink)
 
     repl.run_once("sasha profile other")

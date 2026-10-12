@@ -138,41 +138,44 @@ def test_ac2_third_word_after_two_complete_words():
 
 
 # --- AC3: complete_builtin_arg --------------------------------------------
+#
+# Amended by Tier 1 (2026-10-12): the trigger-economy inversion (ISSUE-067)
+# removed the mute/unmute builtins, so `muted_commands` is no longer a
+# parameter and the only argument completion left is a profile name.
 
 def test_ac3_verb_completion():
     from sasha.completion import complete_builtin_arg
 
-    result = complete_builtin_arg(["sasha", "m"], 1, [], [])
-    assert result == ["mute"]
+    result = complete_builtin_arg(["sasha", "p"], 1, [])
+    assert result == ["profile"]
 
 
 def test_ac3_verb_completion_empty_prefix_all_verbs():
     from sasha.completion import complete_builtin_arg
 
-    result = complete_builtin_arg(["sasha", ""], 1, [], [])
-    assert sorted(result) == ["help", "mute", "profile", "unmute"]
+    result = complete_builtin_arg(["sasha", ""], 1, [])
+    assert sorted(result) == ["help", "profile"]
+
+
+def test_ac3_mute_and_unmute_are_not_completed():
+    from sasha.completion import complete_builtin_arg
+
+    assert complete_builtin_arg(["sasha", "m"], 1, []) == []
+    assert complete_builtin_arg(["sasha", "un"], 1, []) == []
 
 
 def test_ac3_profile_arg_completion():
     from sasha.completion import complete_builtin_arg
 
     result = complete_builtin_arg(["sasha", "profile", "d"], 2,
-                                   ["deepseek", "local"], [])
+                                   ["deepseek", "local"])
     assert result == ["deepseek"]
-
-
-def test_ac3_unmute_arg_completion():
-    from sasha.completion import complete_builtin_arg
-
-    result = complete_builtin_arg(["sasha", "unmute", "n"], 2,
-                                   [], ["npm", "yes"])
-    assert result == ["npm"]
 
 
 def test_ac3_none_when_not_sasha():
     from sasha.completion import complete_builtin_arg
 
-    result = complete_builtin_arg(["git", "chec"], 1, ["deepseek"], ["npm"])
+    result = complete_builtin_arg(["git", "chec"], 1, ["deepseek"])
     assert result is None
 
 
@@ -180,57 +183,12 @@ def test_ac3_none_for_cword_outside_one_or_two():
     from sasha.completion import complete_builtin_arg
 
     result = complete_builtin_arg(["sasha", "profile", "deepseek", "x"], 3,
-                                   ["deepseek"], ["npm"])
+                                   ["deepseek"])
     assert result is None
 
 
 def test_ac3_none_for_unrecognized_verb_at_cword_two():
     from sasha.completion import complete_builtin_arg
 
-    result = complete_builtin_arg(["sasha", "help", "x"], 2,
-                                   ["deepseek"], ["npm"])
+    result = complete_builtin_arg(["sasha", "help", "x"], 2, ["deepseek"])
     assert result is None
-
-
-# --- AC4: MuteStore.muted_commands() --------------------------------------
-
-def test_ac4_empty_store_returns_empty_list(tmp_path):
-    from sasha.mutes import MuteStore
-
-    store = MuteStore(tmp_path / "mutes.json")
-    assert store.muted_commands() == []
-
-
-def test_ac4_returns_muted_command_names(tmp_path):
-    from sasha.mutes import MuteStore
-
-    store = MuteStore(tmp_path / "mutes.json", threshold=1)
-    store.record_ignored("npm", 1)
-    store.record_ignored("yes", 1)
-    assert store.muted_commands() == ["npm", "yes"]
-
-
-def test_ac4_deduplicates_multiple_exit_codes_for_same_command(tmp_path):
-    from sasha.mutes import MuteStore
-
-    store = MuteStore(tmp_path / "mutes.json", threshold=1)
-    store.record_ignored("npm", 1)
-    store.record_ignored("npm", 2)
-    assert store.muted_commands() == ["npm"]
-
-
-def test_ac4_unmuted_entries_excluded(tmp_path):
-    from sasha.mutes import MuteStore
-
-    store = MuteStore(tmp_path / "mutes.json", threshold=1)
-    store.record_ignored("npm", 1)
-    store.unmute("npm")
-    assert store.muted_commands() == []
-
-
-def test_ac4_below_threshold_not_muted(tmp_path):
-    from sasha.mutes import MuteStore
-
-    store = MuteStore(tmp_path / "mutes.json", threshold=3)
-    store.record_ignored("npm", 1)
-    assert store.muted_commands() == []

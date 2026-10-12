@@ -276,10 +276,8 @@ def test_ac10_repl_questioner_defaults_to_none():
     class _FakeExecutor:
         cwd = "/spy"
 
-    class _FakeMutes:
-        pass
 
-    repl = Repl(_config(), _FakeExecutor(), _FakeMutes(), Session(),
+    repl = Repl(_config(), _FakeExecutor(), Session(),
                 lambda p: None, None, lambda prompt: "", _CaptureSink(False))
     assert repl._questioner is None
 
@@ -298,11 +296,9 @@ def test_ac10_repl_threads_questioner_into_run_consult(monkeypatch):
     class _FakeExecutor:
         cwd = "/spy"
 
-    class _FakeMutes:
-        pass
 
     sentinel = object()
-    repl = Repl(_config(), _FakeExecutor(), _FakeMutes(), Session(),
+    repl = Repl(_config(), _FakeExecutor(), Session(),
                 lambda p: object(), None, lambda prompt: "",
                 _CaptureSink(False), questioner=sentinel)
     repl._consult()

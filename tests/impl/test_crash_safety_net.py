@@ -289,7 +289,7 @@ def _crash_repl(monkeypatch, tmp_path, *, limit=3, inputs=6):
     state_dir = tmp_path / "state"
     state_dir.mkdir()
     sink = TerminalSink()
-    repl = Repl(cfg, _Ex(), None, Session(cfg.limits.history_tokens),
+    repl = Repl(cfg, _Ex(), Session(cfg.limits.history_tokens),
                 client_factory=lambda p: None, confirmer=None,
                 input_fn=input_fn, sink=sink, state_dir=state_dir,
                 breaker=guard.CircuitBreaker(limit=limit))

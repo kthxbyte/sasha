@@ -123,7 +123,6 @@ api_key_required = false
 history_tokens = 12000
 stderr_capture_bytes = 8192
 max_tool_turns = 10
-mute_threshold = 3
 
 [safe_commands]
 sensitive_paths = [
@@ -251,17 +250,22 @@ how the command behaved:
 
 | Situation | Detection | Behaviour |
 |---|---|---|
-| Command not found or plain natural language (typos, math, English) | Exit code 127 | **Auto-consults immediately.** The LLM sees the line and answers or suggests a corrected command. |
-| Not valid bash syntax (unclosed quote, bad pipe) | Syntax pre-check fails — line is never executed | **Auto-consults immediately.** The LLM sees the bad line and explains the syntax error. |
-| Command ran but failed (non-zero exit) | Any exit code besides 0 and 127, and the command is not muted | **Passive offer.** Sasha prints `[sasha] failed (exit N) — press Enter to ask` and waits. Press Enter to consult the LLM, or type any other command to ignore the offer and move on. |
-| Command failed but is muted | Mute store says this `(command, exit)` pair is muted | **Nothing.** No offer, no consultation. |
-| User terminated the command (Ctrl-C) | Signal (SIGINT, SIGPIPE) | **Nothing.** |
+| Command not found or plain natural language (typos, math, English) | Exit code 127 | **Consults immediately.** The LLM sees the line and answers or suggests a corrected command. |
+| Not valid bash syntax (unclosed quote, bad pipe) | Syntax pre-check fails — line is never executed | **Consults immediately.** The LLM sees the bad line and explains the syntax error. |
+| Command ran but failed | Any non-zero exit code | **Consults immediately.** The LLM sees the exit code and the captured stderr and explains what went wrong. |
+| User terminated the command (Ctrl-C) | Signal (SIGINT, SIGPIPE) | **Nothing.** You stopped it; there is nothing to explain. |
 | Command succeeded | Exit code 0 | **Nothing.** |
 
-Auto-consults on exit 127 and syntax errors happen because the line had no
-other purpose — the user wasn't running a real command, so spending tokens is
-appropriate. All other failures are zero-token offers: the user decides whether
-to consult.
+Every failure consults. An earlier version consulted only on exit 127 and
+syntax errors and merely *offered* a consult for other failures — waiting for a
+bare Enter — with a mute store to suppress repeat offers. That apparatus existed
+to spend a paid API budget conservatively. Against a local model the marginal
+token is free while a failed command is exactly when an explanation is worth
+having, so there is nothing left to ration and no offer to accept or ignore.
+
+If the noise is unwanted for a particular command, the honest answer is to fix
+the command, or raise `history_tokens` and ignore it — not to teach Sasha to
+stay quiet about failures.
 
 ### Reasoning display
 
@@ -530,24 +534,8 @@ the `y`/`n`/`e` confirmation gate above — no action is proposed here, just
 a question — and can chain into a multi-question batch (`Question 2/2`,
 etc.) before control returns to the model.
 
-### Muting
+### Built-in commands
 
-When you repeatedly ignore offers for the same `(command, exit_code)` pair,
-Sasha learns and stops bothering you. After 3 ignored offers (configurable via
-`mute_threshold`), Sasha prints:
-
-```
-[sasha] muting offers for <cmd> exit <N> — 'sasha unmute <cmd>' to restore
-```
-
-From then on, that command failing with that exit code produces no offer.
-
-**Built-in commands:**
-
-- `sasha mute <cmd> [<N>]` — mute a command for a specific exit code `N`, or
-  all exit codes if `N` is omitted.
-- `sasha unmute <cmd> [<N>]` — unmute a command for a specific exit code `N`,
-  or all exit codes if `N` is omitted.
 - `sasha profile [<name>]` — show current profile (`[sasha] profile: <name> (<model> @ <base_url>)`), or switch to `<name>`.
 - `sasha memory` — show general memory (always) and the current
   project's memory (when you're in a git repository), each with an entry
@@ -568,16 +556,11 @@ From then on, that command failing with that exit code produces no offer.
   by default) — see State below.
 - `sasha help` — show available built-ins.
 
-Mute state is saved to `~/.local/state/sasha/mutes.json` and persists across
-sessions. Accepting an offer (pressing Enter) resets the ignore streak for
-that pair to zero.
-
 ### Tab completion
 
 Press TAB like you would in bash. The first word on a line completes against
-`sasha`'s own built-ins (`mute`, `unmute`, `profile`, `help`), plus every
-executable on `$PATH`. Arguments to `sasha mute`/`sasha unmute` complete
-against currently-muted commands; arguments to `sasha profile` complete
+`sasha`'s own built-ins (`profile`, `help`), plus every
+executable on `$PATH`. Arguments to `sasha profile` complete
 against your configured profile names. For everything else, Sasha shells out
 to your system's real bash-completion (so `git checkout <TAB>` and similar
 command-specific completions work exactly as they do in bash), falling back
@@ -713,8 +696,6 @@ Command output is never prefixed or altered.
 
 | Event | Line |
 |---|---|
-| Offer | `[sasha] failed (exit N) — press Enter to ask` |
-| Auto-mute | `[sasha] muting offers for <cmd> exit <N> — 'sasha unmute <cmd>' to restore` |
 | LLM unreachable | `[sasha] <profile> unreachable: <reason> — 'sasha profile <name>' to switch` |
 | Loop stopped (repetition) | `[sasha] stopping: repeated identical action — <action>` |
 | Loop stopped (turn limit) | `[sasha] stopping: hit the N-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress` |
@@ -730,7 +711,6 @@ Command output is never prefixed or altered.
 
 Sasha writes its state to `~/.local/state/sasha/`:
 
-- `mutes.json` — mute counters (atomic write, survives corruption)
 - `history` — readline command history (1000-entry cap)
 - `crashes/` — crash reports from internal errors, as `.txt` + `.json`
   (see Resilience above)

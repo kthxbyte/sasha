@@ -41,7 +41,7 @@ def _repl(profiles, default, getpass_fn, path=None, notice=None):
     cfg = Config(default_profile=default, profiles=profiles, limits=Limits(),
                  path=path, notice=notice)
     sink = _SpySink(events)
-    repl = Repl(cfg, None, None, None, None, None, lambda prompt: "", sink,
+    repl = Repl(cfg, None, None, None, None, lambda prompt: "", sink,
                 getpass_fn=getpass_fn)
     return repl, events
 

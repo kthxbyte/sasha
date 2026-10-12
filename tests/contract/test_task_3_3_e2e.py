@@ -167,35 +167,34 @@ def test_ac1_natural_language_line(sasha_factory):
 
 # --- AC2 --------------------------------------------------------------------
 
-def test_ac2_offer_accept_no_penalty(sasha_factory):
+def test_ac2_failure_consults_immediately(sasha_factory):
+    # Amended by Tier 1 (2026-10-12): the trigger-economy inversion (ISSUE-067)
+    # removed the OFFER state, so a failing command consults with no extra
+    # keystroke and with nothing recorded against the command.
     with StubServer([{"kind": "text", "text": "the hint you need"}]) as stub:
         p = sasha_factory(stub.base_url)
         p.send("bash -c 'exit 3'")
-        p.read_until("[sasha] failed (exit 3) — press Enter to ask")
-        p.send("")
-        p.read_until("the hint you need")
-        pairs = _mute_pairs(p)
-        entry = pairs.get("bash:3")
-        assert entry is None or entry["ignored_streak"] == 0
+        p.read_until("the hint you need")        # one command, no Enter needed
+        p.drain_prompt()
+        assert _mute_pairs(p) == {}              # no mute bookkeeping any more
 
 
 # --- AC3 ----------------------------------------------------------------------
 
-def test_ac3_mute_after_three_ignores(sasha_factory):
-    with StubServer([]) as stub:
+def test_ac3_repeated_failures_always_consult_and_never_mute(sasha_factory):
+    # Amended by Tier 1 (2026-10-12): ISSUE-067 — there is no ignore streak, so
+    # there is nothing to mute. Four identical failures must consult four times.
+    with StubServer([{"kind": "text", "text": "explained"}] * 4) as stub:
         p = sasha_factory(stub.base_url)
-        for _ in range(3):
+        for _ in range(4):
             p.send("bash -c 'exit 3'")
-            p.read_until("press Enter to ask")
-            p.send("true")          # non-empty input → offer ignored
+            p.read_until("explained")
             p.drain_prompt()
-        p.read_until("[sasha] muting offers for bash exit 3 — "
-                     "'sasha unmute bash' to restore")
-        before = len(p.transcript)
-        p.send("bash -c 'exit 3'")  # fourth failure: no offer
-        p.drain_prompt()
-        tail = p.transcript[before:].decode("utf-8", errors="replace")
-        assert "press Enter to ask" not in tail
+        assert len(stub.requests) == 4
+        text = p.transcript.decode("utf-8", errors="replace")
+        assert "press Enter to ask" not in text
+        assert "muting offers for" not in text
+        assert _mute_pairs(p) == {}
 
 
 # --- AC4 ------------------------------------------------------------------------
@@ -233,8 +232,9 @@ def test_ac5_llm_down_shell_survives(sasha_factory):
 def test_ac6_readme_documents_vocabulary():
     readme = (REPO / "README.md").read_text()
     for needle in [
-        "press Enter to ask",
-        "muting offers for",
+        # Amended by Tier 1 (2026-10-12): "press Enter to ask" and "muting
+        # offers for" were removed from the vocabulary by ISSUE-067 and are
+        # asserted absent below.
         "unreachable:",
         # Amended by Tier 1 for Task 16.2 (multi-tool registry): stop-loop
         # wording changes from "command" to "action" once the guard covers
@@ -247,3 +247,5 @@ def test_ac6_readme_documents_vocabulary():
         "pip install",
     ]:
         assert needle in readme, f"README missing: {needle!r}"
+    for gone in ["press Enter to ask", "muting offers for", "sasha mute"]:
+        assert gone not in readme, f"README still documents removed: {gone!r}"

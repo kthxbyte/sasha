@@ -24,7 +24,6 @@ class Limits:
     history_tokens: int = 12000
     stderr_capture_bytes: int = 8192
     max_tool_turns: int = 10
-    mute_threshold: int = 3
 
 
 # How much of the model's reasoning the terminal shows. "compact" draws one
@@ -107,7 +106,6 @@ _VALID_LIMITS_FIELDS = {
     "history_tokens",
     "stderr_capture_bytes",
     "max_tool_turns",
-    "mute_threshold",
 }
 
 _DEFAULT_CONFIG_TOML = """\
@@ -166,7 +164,6 @@ api_key_required = false
 history_tokens = 12000
 stderr_capture_bytes = 8192
 max_tool_turns = 10
-mute_threshold = 3
 
 [safe_commands]
 sensitive_paths = [

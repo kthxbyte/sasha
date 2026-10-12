@@ -2,7 +2,16 @@
 
 Written by Tier 1 at spec time; immutable to the implementer.
 Spec: docs/superpowers/specs/task-1.5-triggers.md (design §5.2, §6).
-Pure logic; uses real ExecResult and MuteStore instances.
+
+AMENDED BY TIER 1 (2026-10-12) for the trigger-economy inversion (ISSUE-067).
+The original contract encoded paid-token rationing: exit 127 auto-consulted,
+every other failure only *offered* a consult the user had to accept with a bare
+Enter, and a MuteStore suppressed repeat offers after three ignores. That whole
+apparatus existed to spend a paid API budget conservatively. Against a local
+model the marginal token is free while a failed command is exactly when an
+explanation is worth having, so there is nothing left to ration and no offer to
+accept or ignore: every non-zero exit consults. `Decision.OFFER`, the mute
+store, and `command_word()` are gone, and `decide()` now takes only the result.
 """
 
 import pytest
@@ -21,108 +30,75 @@ def _result(exit_code, sig=None):
     )
 
 
-@pytest.fixture
-def mutes(tmp_path):
-    from sasha.mutes import MuteStore
+# --- AC1: any failure consults -------------------------------------------------
 
-    return MuteStore(tmp_path / "mutes.json")
-
-
-# --- AC1: exit 127 auto-consults, mute-exempt --------------------------------
-
-def test_ac1_127_auto_consults(mutes):
+def test_ac1_127_auto_consults():
     from sasha.triggers import Decision, decide
 
-    assert decide("nosuchcmd", _result(127), mutes) is Decision.AUTO_CONSULT
+    assert decide(_result(127)) is Decision.AUTO_CONSULT
 
 
-def test_ac1_127_exempt_from_pair_mute(mutes):
+def test_ac1_ordinary_failures_also_consult():
+    """The heart of the inversion: `grep` finding nothing is normal life, but
+    explaining it costs nothing locally, so it consults instead of offering."""
     from sasha.triggers import Decision, decide
 
-    mutes.mute("nosuchcmd", 127)
-    assert decide("nosuchcmd", _result(127), mutes) is Decision.AUTO_CONSULT
+    assert decide(_result(1)) is Decision.AUTO_CONSULT
+    assert decide(_result(2)) is Decision.AUTO_CONSULT
+    assert decide(_result(123)) is Decision.AUTO_CONSULT
 
 
-def test_ac1_127_exempt_from_wildcard_mute(mutes):
+def test_ac1_decision_does_not_depend_on_the_line():
+    """`decide()` reads only the result — there is no line-dependent muting."""
     from sasha.triggers import Decision, decide
 
-    mutes.mute("nosuchcmd")
-    assert decide("nosuchcmd args", _result(127), mutes) is Decision.AUTO_CONSULT
+    assert decide(_result(1)) is decide(_result(1)) is Decision.AUTO_CONSULT
+    import inspect
+
+    assert list(inspect.signature(decide).parameters) == ["result"]
 
 
-# --- AC2: plain failures offer unless muted ------------------------------------
+# --- AC2: success is silent ----------------------------------------------------
 
-def test_ac2_unmuted_failure_offers(mutes):
+def test_ac2_success_is_nothing():
     from sasha.triggers import Decision, decide
 
-    assert decide("grep -r foo .", _result(1), mutes) is Decision.OFFER
-    assert decide("make -j4", _result(2), mutes) is Decision.OFFER
+    assert decide(_result(0)) is Decision.NOTHING
 
 
-def test_ac2_pair_mute_silences_only_that_pair(mutes):
+# --- AC3: signal deaths are silent ---------------------------------------------
+
+def test_ac3_signal_deaths_are_nothing():
     from sasha.triggers import Decision, decide
 
-    mutes.mute("grep", 1)
-    assert decide("grep -r foo .", _result(1), mutes) is Decision.NOTHING
-    assert decide("grep -r foo .", _result(2), mutes) is Decision.OFFER
+    assert decide(_result(130, sig=2)) is Decision.NOTHING
+    assert decide(_result(141, sig=13)) is Decision.NOTHING
+    assert decide(_result(143, sig=15)) is Decision.NOTHING
 
 
-def test_ac2_wildcard_mute_silences_all_exits(mutes):
-    from sasha.triggers import Decision, decide
+# --- AC4: the removed vocabulary stays removed ---------------------------------
 
-    mutes.mute("grep")
-    assert decide("grep -r foo .", _result(1), mutes) is Decision.NOTHING
-    assert decide("grep -r foo .", _result(2), mutes) is Decision.NOTHING
-
-
-def test_ac2_mute_lookup_keys_on_command_word(mutes):
-    from sasha.triggers import Decision, decide
-
-    mutes.mute("grep", 1)
-    # different command word, same exit — still offers
-    assert decide("rg -r foo .", _result(1), mutes) is Decision.OFFER
-
-
-# --- AC3: signal deaths are silent -----------------------------------------------
-
-def test_ac3_signal_deaths_are_nothing(mutes):
-    from sasha.triggers import Decision, decide
-
-    assert decide("cat bigfile", _result(130, sig=2), mutes) is Decision.NOTHING
-    assert decide("yes | head", _result(141, sig=13), mutes) is Decision.NOTHING
-    assert decide("sleep 999", _result(143, sig=15), mutes) is Decision.NOTHING
-
-
-# --- AC4: success is silent ---------------------------------------------------------
-
-def test_ac4_success_is_nothing(mutes):
-    from sasha.triggers import Decision, decide
-
-    assert decide("ls", _result(0), mutes) is Decision.NOTHING
-
-
-# --- AC5: command_word -----------------------------------------------------------------
-
-def test_ac5_command_word_first_token():
-    from sasha.triggers import command_word
-
-    assert command_word("grep -r foo .") == "grep"
-    assert command_word("  spaced   out  ") == "spaced"
-
-
-def test_ac5_command_word_unparseable_or_empty():
-    from sasha.triggers import command_word
-
-    assert command_word('echo "unclosed') == ""
-    assert command_word("") == ""
-    assert command_word("   ") == ""
-
-
-# --- AC6: enum vocabulary ------------------------------------------------------------------
-
-def test_ac6_decision_enum_values():
+def test_ac4_decision_enum_values():
     from sasha.triggers import Decision
 
     assert Decision.AUTO_CONSULT.value == "auto_consult"
-    assert Decision.OFFER.value == "offer"
     assert Decision.NOTHING.value == "nothing"
+
+
+def test_ac4_offer_is_gone():
+    """A vestigial OFFER would be a state the REPL can no longer service."""
+    from sasha.triggers import Decision
+
+    assert not hasattr(Decision, "OFFER")
+
+
+def test_ac4_mute_store_module_is_gone():
+    with pytest.raises(ImportError):
+        import sasha.mutes  # noqa: F401
+
+
+def test_ac4_command_word_is_gone():
+    """It existed only to key mute lookups; nothing else used it."""
+    import sasha.triggers as triggers
+
+    assert not hasattr(triggers, "command_word")

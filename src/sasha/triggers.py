@@ -1,38 +1,30 @@
 from __future__ import annotations
 
 import enum
-import shlex
 
 from sasha.executor import ExecResult
-from sasha.mutes import MuteStore
 
 
 class Decision(enum.Enum):
     AUTO_CONSULT = "auto_consult"
-    OFFER = "offer"
     NOTHING = "nothing"
 
 
-def command_word(line: str) -> str:
-    stripped = line.strip()
-    if not stripped:
-        return ""
-    try:
-        tokens = shlex.split(stripped)
-    except ValueError:
-        return ""
-    if not tokens:
-        return ""
-    return tokens[0]
+def decide(result: ExecResult) -> Decision:
+    """Decide whether a finished line is worth consulting the model about.
 
+    Every non-zero exit consults. The previous design consulted only on exit
+    127 / syntax errors and merely *offered* on other failures, with a mute
+    store to suppress repeat offers — a token-economy apparatus built to ration
+    a paid API. Against a local model the marginal token is free while a failed
+    command is exactly when an explanation is worth having, so there is nothing
+    left to ration and no offer to accept or ignore.
 
-def decide(line: str, result: ExecResult, mutes: MuteStore) -> Decision:
+    A signal means the user stopped the command themselves, and exit 0 is
+    success; neither is a failure to explain.
+    """
     if result.signal is not None:
         return Decision.NOTHING
     if result.exit_code == 0:
         return Decision.NOTHING
-    if result.exit_code == 127:
-        return Decision.AUTO_CONSULT
-    if mutes.is_muted(command_word(line), result.exit_code):
-        return Decision.NOTHING
-    return Decision.OFFER
+    return Decision.AUTO_CONSULT

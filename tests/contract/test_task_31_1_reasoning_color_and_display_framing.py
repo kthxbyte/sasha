@@ -180,23 +180,6 @@ class _FakeExecutor:
         return _FakeExecResult(self._cwd)
 
 
-class _FakeMutes:
-    def is_muted(self, command, exit_code):
-        return False
-
-    def record_ignored(self, command, exit_code):
-        return False
-
-    def record_acted(self, command, exit_code):
-        pass
-
-    def mute(self, command, exit_code=None):
-        pass
-
-    def unmute(self, command, exit_code=None):
-        pass
-
-
 class _RefusingReplConfirmer:
     def ask(self, command, description):
         return ("no", "")
@@ -233,7 +216,7 @@ def _make_repl(cwd="/tmp"):
                      activity_indicator_enabled=False)
     executor = _FakeExecutor(cwd)
     sink = _RecordingSink()
-    repl = Repl(config, executor, _FakeMutes(), Session(),
+    repl = Repl(config, executor, Session(),
                 lambda p: ChatClient(p, timeout_s=10.0), _RefusingReplConfirmer(),
                 lambda prompt: "", sink)
     repl._current_profile = profile
