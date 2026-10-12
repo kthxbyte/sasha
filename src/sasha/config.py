@@ -59,7 +59,6 @@ class Config:
     activity_indicator_thinking_color: str = "#C084FC"
     activity_indicator_tool_color: str = "#FFD700"
     llm_debug_enabled: bool = False
-    directory_recap_enabled: bool = True
     path: pathlib.Path | None = None
     notice: str | None = None
 
@@ -184,9 +183,6 @@ tool_color = "#FFD700"
 
 [llm_debug]
 enabled = false
-
-[directory_recap]
-enabled = true
 """
 
 
@@ -315,12 +311,6 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         if isinstance(raw_llm_debug_enabled, bool):
             llm_debug_enabled = raw_llm_debug_enabled
 
-    directory_recap_enabled = True
-    directory_recap_table = raw.get("directory_recap", {})
-    if isinstance(directory_recap_table, dict):
-        raw_directory_recap_enabled = directory_recap_table.get("enabled")
-        if isinstance(raw_directory_recap_enabled, bool):
-            directory_recap_enabled = raw_directory_recap_enabled
 
     if default_profile_name not in profile_fields_by_name:
         raise ConfigError(
@@ -361,7 +351,6 @@ def _build_config(raw: dict, path: pathlib.Path | None,
         activity_indicator_thinking_color=activity_indicator_thinking_color,
         activity_indicator_tool_color=activity_indicator_tool_color,
         llm_debug_enabled=llm_debug_enabled,
-        directory_recap_enabled=directory_recap_enabled,
         path=path,
         notice=notice,
     )
@@ -430,48 +419,6 @@ def set_api_key(path: pathlib.Path, profile_name: str, api_key: str) -> None:
         lines[found] = key_line
     else:
         lines.insert(end, key_line)
-
-    try:
-        path.write_text("".join(lines))
-    except OSError as exc:
-        raise ConfigError(f"couldn't write {path}: {exc}") from exc
-
-
-def set_directory_recap_enabled(path: pathlib.Path, enabled: bool) -> None:
-    try:
-        text = path.read_text()
-    except OSError as exc:
-        raise ConfigError(f"couldn't read {path}: {exc}") from exc
-
-    lines = text.splitlines(keepends=True)
-    header = "[directory_recap]"
-    start = None
-    for i, line in enumerate(lines):
-        if line.strip() == header:
-            start = i
-            break
-    if start is None:
-        raise ConfigError(f"no [directory_recap] table in {path}")
-
-    end = len(lines)
-    for i in range(start + 1, len(lines)):
-        stripped = lines[i].strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            end = i
-            break
-
-    enabled_line = f"enabled = {'true' if enabled else 'false'}\n"
-    key_re = re.compile(r"^\s*enabled\s*=")
-    found = None
-    for i in range(start + 1, end):
-        if key_re.match(lines[i]):
-            found = i
-            break
-
-    if found is not None:
-        lines[found] = enabled_line
-    else:
-        lines.insert(end, enabled_line)
 
     try:
         path.write_text("".join(lines))

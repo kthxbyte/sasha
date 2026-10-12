@@ -271,8 +271,7 @@ def _crash_repl(monkeypatch, tmp_path, *, limit=3, inputs=6):
 
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    cfg = dataclasses.replace(config_mod.load(None),
-                              directory_recap_enabled=False)
+    cfg = dataclasses.replace(config_mod.load(None))
     monkeypatch.setattr(repl_mod.memory, "resolve_git_root", lambda cwd: None)
 
     class _Ex:

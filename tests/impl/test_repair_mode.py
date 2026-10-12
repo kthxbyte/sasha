@@ -219,9 +219,6 @@ base_url = "https://frontier.test/v1"
 model = "big-model"
 api_key = "sk-test"
 api_key_required = true
-
-[directory_recap]
-enabled = false
 """)
     monkeypatch.setattr(main_mod, "_sasha_checkout_root", lambda: checkout)
     monkeypatch.setattr(main_mod.Repl, "loop", lambda self: None)
@@ -315,9 +312,6 @@ base_url = "https://frontier.test/v1"
 model = "big-model"
 api_key = ""
 api_key_required = true
-
-[directory_recap]
-enabled = false
 """)
     monkeypatch.setattr(main_mod, "_sasha_checkout_root", lambda: checkout)
     monkeypatch.setattr(main_mod.Repl, "loop", lambda self: None)

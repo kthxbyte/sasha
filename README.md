@@ -143,9 +143,6 @@ tool_color = "#FFD700"
 
 [llm_debug]
 enabled = false
-
-[directory_recap]
-enabled = true
 ```
 
 - `[safe_commands] sensitive_paths` — glob patterns that keep a command
@@ -156,8 +153,6 @@ enabled = true
   LLM is thinking or a tool is running; `enabled = false` turns it off.
 - `[llm_debug] enabled` — raw request/response logging for
   troubleshooting; see State below.
-- `[directory_recap] enabled` — the passive on-`cd` check; same as
-  `sasha directory-recap on|off` — see Directory recap below.
 
 `[limits]` is written by the self-installed file with the built-in defaults
 shown in the example above; drop the keys you don't need, or delete the whole
@@ -300,27 +295,27 @@ characters is dropped, and Sasha says so when it prints.
 If the model doesn't expose reasoning at all (most hosted APIs don't), none of
 this appears and the answer streams as usual.
 
-### Directory recap
+### Git headline
 
-The first time you `cd` into a given directory in a session (on, and only
-on, an explicit `cd` — not every prompt), Sasha decides whether a one-line
-orientation is worth showing, entirely passively:
+The first time in a session that you `cd` into a repository, Sasha prints one
+free line naming its last commit:
 
-- **Nothing** for directories with no relevant history, huge "umbrella"
-  directories with many child git repos underneath, directories with a
-  lot of unrelated activity spread across many subpaths, or activity
-  that's gone stale.
-- **A single free line**, no LLM call, when the directory's own last git
-  commit is enough: `[sasha] sasha: last commit 2h ago — "Track Task 61.1"`.
-- **A short background LLM summary** otherwise (recent commands run there,
-  or a project marker file with no prior activity yet) — doesn't block the
-  shell; prints when it finishes.
+```
+[sasha] sasha: last commit 2 hours ago — "Track Task 61.1"
+```
 
-`sasha recap` triggers the same summary explicitly, synchronously, always
-via the LLM, regardless of what the passive check would have decided.
-`sasha directory-recap on|off` toggles the passive behavior in
-`config.toml` (on by default); the explicit `sasha recap` command always
-works regardless of the toggle.
+No LLM call, no background thread, no configuration. It costs one `git log -1`
+and it is the only directory orientation Sasha does.
+
+This replaced a much larger feature. The old "directory recap" classified every
+directory with five heuristic constants (umbrella directories, activity fan-out,
+staleness, vendor/cache exclusion, marker files), printed the same git line when
+it felt that was enough, and otherwise spawned a background LLM thread to write
+a summary. Its own design document recorded a **44% false-positive rate** for the
+heuristic it rejected, the background thread caused two separate flaky-test
+investigations, and it accounted for roughly 1,300 lines of code and tests to
+produce one line on `cd`. `sasha recap` and `sasha directory-recap on|off` are
+gone with it.
 
 ### Tools available to the LLM
 
@@ -543,13 +538,9 @@ etc.) before control returns to the model.
 - `sasha forget` — permanently delete the current project's remembered
   memory only (general memory is untouched). Asks for confirmation
   first; nothing is deleted on any answer other than `yes`.
-- `sasha recap` — explicit, synchronous, always-via-LLM directory recap
-  for the current directory — see Directory recap above.
 - `sasha reasoning` — print back everything the model has reasoned this
   session, including the parts the default one-line display didn't show —
   see Reasoning display above.
-- `sasha directory-recap on|off` — toggle the *passive* on-`cd` recap
-  check (on by default) — see Directory recap above.
 - `sasha compact-log` — manually strip stored results out of
   `tool_log.jsonl` entries; the same compaction also runs automatically
   in the background once the file passes `tool_log_max_size_mb` (100 MB
@@ -703,7 +694,7 @@ Command output is never prefixed or altered.
 | Ctrl+Z | `[sasha] Ctrl+Z not supported — command terminated` |
 | Project switch | `[sasha] project: <name> (<N> memories, last: "<gist>")` |
 | Memory created | `[sasha] created .sasha/memory/ — remembering context for this project from now on (gitignored automatically)` |
-| Directory recap (direct) | `[sasha] <dir>: last commit <age> — "<subject>"` |
+| Git headline | `[sasha] <repo>: last commit <age> — "<subject>"` |
 | Log compacted | `[sasha] tool_log.jsonl compacted: <before> MB → <after> MB` |
 | Bad config | `sasha: config error: <message>` (startup, exit 2) |
 

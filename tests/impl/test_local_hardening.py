@@ -300,8 +300,7 @@ def test_loop_continues_after_keyboard_interrupt_inside_run_once(
     _isolated_config_env(monkeypatch, tmp_path)
     from sasha import repl as repl_mod
 
-    cfg = dataclasses.replace(config_mod.load(None),
-                              directory_recap_enabled=False)
+    cfg = dataclasses.replace(config_mod.load(None))
     monkeypatch.setattr(repl_mod.memory, "resolve_git_root", lambda cwd: None)
 
     sink = _Sink()

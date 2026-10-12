@@ -16,7 +16,7 @@ import sasha.config as config
 from sasha.activity_indicator import ActivityIndicator
 from sasha.agent import run_consult
 from sasha.llm import ChatError, background_request
-from sasha import directory_recap
+from sasha import git_headline
 from sasha import guard
 from sasha import memory
 from sasha import safe_commands
@@ -85,8 +85,7 @@ class Repl:
         self._memory_dir_existed = False
         self._bootstrap_attempted = set()      # set[pathlib.Path]
         self._last_bootstrap_thread = None     # threading.Thread | None, test seam
-        self._recapped_dirs: set[str] = set()
-        self._last_recap_thread = None
+        self._headlined_dirs: set[str] = set()
         self._phase_needs_newline = False
 
     def _on_activity_phase(self, phase):
@@ -232,25 +231,17 @@ class Repl:
             self._handle_forget_builtin()
         elif verb == "compact-log":
             self._handle_compact_log_builtin()
-        elif verb == "recap":
-            self._handle_recap_builtin()
         elif verb == "reasoning":
             self._handle_reasoning_builtin()
         elif verb == "repair":
             self._sink.write_line(
                 "[sasha] 'repair' runs as its own session — exit this one and "
                 "run 'sasha repair' at your shell prompt")
-        elif verb == "directory-recap":
-            if len(tokens) >= 2:
-                self._handle_directory_recap_toggle(tokens[1])
-            else:
-                self._sink.write_line(f"[sasha] unknown command: {rest}")
         elif verb == "help":
             self._sink.write_line("[sasha] sasha profile [<name>] "
                       "(asks for a key if needed), "
                       "sasha memory, sasha forget, "
                       "sasha compact-log, "
-                      "sasha recap, sasha directory-recap on|off, "
                       "sasha reasoning, "
                       "?? <question>")
         else:
@@ -329,43 +320,6 @@ class Repl:
         for line in text.splitlines():
             self._sink.write_line(line, color=_REASONING_COLOR)
 
-    def _handle_recap_builtin(self):
-        cwd = self._executor.cwd
-        context = directory_recap.gather_context(pathlib.Path(cwd))
-        prompt = directory_recap.build_prompt(context)
-        self._sink.write_line("[sasha] thinking…")
-        try:
-            client = self._client_factory(self._current_profile)
-            client.chat([{"role": "user", "content": prompt}], [],
-                        self._sink.write_chunk)
-            self._sink.ensure_newline()
-        except ChatError as e:
-            self._sink.write_line(
-                f"[sasha] {self._current_profile.name} unreachable: "
-                f"{e.reason} — 'sasha profile <name>' to switch")
-
-    def _handle_directory_recap_toggle(self, arg):
-        if arg not in ("on", "off"):
-            self._sink.write_line(f"[sasha] unknown command: directory-recap {arg}")
-            return
-        enabled = (arg == "on")
-        if self._config.path is None:
-            self._sink.write_line(
-                "[sasha] couldn't update directory-recap setting: no "
-                "config file on disk — setting unchanged")
-            return
-        try:
-            config.set_directory_recap_enabled(self._config.path, enabled)
-        except config.ConfigError as e:
-            self._sink.write_line(
-                f"[sasha] couldn't update directory-recap setting: {e} "
-                f"— setting unchanged")
-            return
-        self._config = dataclasses.replace(
-            self._config, directory_recap_enabled=enabled)
-        state = "on" if enabled else "off"
-        self._sink.write_line(f"[sasha] directory-recap: {state}")
-
     def _check_place_shift(self) -> bool:
         cwd = self._executor.cwd
         if cwd == self._last_checked_cwd:
@@ -397,23 +351,21 @@ class Repl:
             return True
         return False
 
-    def _check_directory_recap(self) -> None:
-        if not self._config.directory_recap_enabled:
-            return
+    def _check_git_headline(self) -> None:
+        """One free line the first time this session enters a repository.
+
+        The last commit, printed once per directory. No LLM, no heuristics, no
+        background thread — see git_headline.py for what this replaced.
+        """
         cwd = self._executor.cwd
-        if cwd in self._recapped_dirs:
+        if cwd in self._headlined_dirs:
             return
-        self._recapped_dirs.add(cwd)
-        verdict, text = directory_recap.decide(pathlib.Path(cwd))
-        if verdict == directory_recap.SILENT:
+        self._headlined_dirs.add(cwd)
+        if self._current_repo_root is None:
             return
-        if verdict == directory_recap.RECAP_DIRECT:
+        text = git_headline.headline(self._current_repo_root)
+        if text is not None:
             self._sink.write_line(text)
-            return
-        on_result = getattr(self._sink, "write_async_line", self._sink.write_line)
-        self._last_recap_thread = directory_recap.escalate_async(
-            pathlib.Path(cwd), self._client_factory, self._current_profile,
-            on_result)
 
     def _bootstrap_repo(self, repo_root):
         history = memory.bounded_history(repo_root)
@@ -635,7 +587,7 @@ class Repl:
             return True
 
         if not self._check_place_shift():
-            self._check_directory_recap()
+            self._check_git_headline()
         self._check_commit(stripped, result)
         self._check_crash(stripped, result)
         self._check_memory_created()
@@ -655,7 +607,7 @@ class Repl:
         general_block, _ = memory.load_general_memory_block()
         self._session.set_general_memory(general_block)
         if not self._check_place_shift():
-            self._check_directory_recap()
+            self._check_git_headline()
         home = os.path.expanduser("~")
         user = getpass.getuser()
         host = socket.gethostname()

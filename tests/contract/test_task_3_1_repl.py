@@ -87,18 +87,14 @@ def _repl(stub_url, script=None):
         "other": Profile(name="other", base_url=stub_url,
                          model="other-model", api_key="other-key"),
     }
+    # Amended by Tier 1 (2026-10-12): ISSUE-057's fix -- passing
+    # `directory_recap_enabled=False` here -- became moot in the same session.
+    # ISSUE-069 deleted the directory-recap cascade outright, and with it the
+    # background thread that used to add a stray LLM request and make the
+    # request-count assertions in this file racy. The Config field no longer
+    # exists, so there is nothing left to disable.
     config = Config(default_profile="stubprof", profiles=profiles,
-                    limits=Limits(),
-                    # Amended by Tier 1 (2026-10-12), fixing ISSUE-057: the
-                    # passive directory-recap cascade is enabled by default and
-                    # spawns a BACKGROUND thread that makes its own LLM request.
-                    # For this helper's fake cwd ("/spy") decide() legitimately
-                    # returns ESCALATE, so whether that request lands before or
-                    # after a test's `len(stub.requests) == N` assertion is pure
-                    # thread-scheduling luck. The recap is irrelevant to
-                    # everything these tests assert, so switch it off here
-                    # rather than making every request-count assertion racy.
-                    directory_recap_enabled=False)
+                    limits=Limits())
     executor = SpyExecutor()
     out_chunks = []
     factory_calls = []
