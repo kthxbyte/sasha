@@ -153,6 +153,14 @@ enabled = false
   LLM is thinking or a tool is running; `enabled = false` turns it off.
 - `[llm_debug] enabled` — raw request/response logging for
   troubleshooting; see State below.
+- `prompt`, `sasha_color`, `reasoning_color` — the prompt-line template
+  (bash-`PS1`-style `\u`, `\h`, `\w`, `\W`, plus `\[token\]` colour escapes)
+  and the colours used for Sasha's own lines and for reasoning text. These are
+  **not** in the self-installed file — add them yourself, e.g.
+  `prompt = "\[magenta\][sasha]\[reset\] \[bold-blue\]\w\[reset\] $ "`. Valid
+  colour tokens are the names in `src/sasha/prompt.py` (`red`, `bold-cyan`,
+  `dim-white`, …). A malformed template is a startup config error, not a
+  silently ignored key.
 
 `[limits]` is written by the self-installed file with the built-in defaults
 shown in the example above; drop the keys you don't need, or delete the whole
@@ -200,7 +208,7 @@ $ sasha
  Profile    : llm7 (model: gpt-oss:20b)
  API server : https://api.llm7.io/v1
  Tip : type ?? followed by a question to chat with me directly
-[sasha]✦ user@host:~/project $ 
+[sasha] user@host:~/project $ 
 ```
 
 Sasha prints its active profile, the API endpoint, and a one-time tip about
@@ -209,21 +217,24 @@ also see one-time setup notices above the banner — `config.toml` and
 `PERSONALITY.md` both self-install and announce themselves the first time
 they're created.
 
-The prompt itself shows a `[sasha]✦` tag, then `user@host`, then your current
-working directory (with `$HOME` abbreviated to `~`), bash-`PS1`-style. The
-star blinks whenever Sasha is doing background work — currently, that's
-only the initial-memory bootstrap described under Memory below — and sits
-static the rest of the time.
+The prompt itself is `[sasha] user@host:cwd $ ` — bash-`PS1`-style, with
+`$HOME` abbreviated to `~`. It is fully configurable; see `prompt` in
+Configuration above.
+
+While Sasha is waiting on the model — or running a command it proposed — the
+terminal cursor is animated instead of the prompt, driven by
+`[activity_indicator]` in Configuration. Nothing about it touches your command
+output, and `enabled = false` turns it off.
 
 ### Normal commands
 
 Type any shell command and press Enter — it runs exactly as it would in bash:
 
 ```
-[sasha]✦ user@host:~/project $ ls
-[sasha]✦ user@host:~/project $ echo hello
-[sasha]✦ user@host:~/project $ cd /tmp
-[sasha]✦ user@host:/tmp $ 
+[sasha] user@host:~/project $ ls
+[sasha] user@host:~/project $ echo hello
+[sasha] user@host:~/project $ cd /tmp
+[sasha] user@host:/tmp $ 
 ```
 
 ### Explicit ask
@@ -231,7 +242,7 @@ Type any shell command and press Enter — it runs exactly as it would in bash:
 Prefix a line with `?? ` to consult the LLM directly:
 
 ```
-[sasha]✦ user@host:~/project $ ?? how do I find files larger than 100MB
+[sasha] user@host:~/project $ ?? how do I find files larger than 100MB
 ```
 
 The LLM receives your shell context (cwd, recent commands, captured stderr) and
