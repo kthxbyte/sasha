@@ -233,7 +233,8 @@ def _run(args, repair_mode: bool = False) -> int:
         requested = args.bundle or _newest_crash_bundle(state_dir)
         if requested is not None:
             try:
-                repair_crash = pathlib.Path(requested).read_text()
+                repair_crash = pathlib.Path(requested).read_text(
+                    encoding="utf-8", errors="replace")
                 repair_crash_path = pathlib.Path(requested)
             except OSError as exc:
                 repair_crash = f"(could not read {requested}: {exc})"

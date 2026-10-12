@@ -1,5 +1,7 @@
 import os
 
+from sasha.textio import printable
+
 _RL_IGNORE_START = "\001"
 _RL_IGNORE_END = "\002"
 _RESET = "\x1b[0m"
@@ -99,4 +101,4 @@ def render(template: str, *, user: str, host: str, cwd: str, home: str,
             if color_enabled:
                 parts.append(_RL_IGNORE_START + COLOR_TOKENS[value]
                              + _RL_IGNORE_END)
-    return "".join(parts)
+    return printable("".join(parts))

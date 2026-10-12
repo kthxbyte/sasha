@@ -1,7 +1,6 @@
 import dataclasses
 import getpass
 import os
-import pathlib
 import re
 import shlex
 import shutil
@@ -19,6 +18,7 @@ from sasha import git_headline
 from sasha import guard
 from sasha import memory
 from sasha import safe_commands
+from sasha import textio
 from sasha import tool_log
 from sasha.triggers import Decision, decide
 import sasha.prompt as prompt_mod
@@ -782,7 +782,8 @@ class TerminalSink:
         self._close_chunk_run()
         if not self._ends_in_newline:
             sys.stdout.write("\n")
-        print(self._wrap(text, color if color is not None else self._sasha_color))
+        print(self._wrap(textio.printable(text),
+                        color if color is not None else self._sasha_color))
         self._ends_in_newline = True
 
     def write_async_line(self, text: str, color: str | None = None) -> None:
@@ -796,12 +797,17 @@ class TerminalSink:
         self._reasoning_block_open = False
         self._close_chunk_run()
         sys.stdout.write("\n")
-        print(self._wrap(text, color if color is not None else self._sasha_color))
+        print(self._wrap(textio.printable(text),
+                        color if color is not None else self._sasha_color))
         self._ends_in_newline = True
 
     def _write_colored_chunk(self, text: str, kind: str, color: str) -> None:
         if not text:
             return
+        # stdout's error handler is 'strict', so a surrogate -- from a
+        # surrogateescaped path, or from a JSON \udXXX escape in model output --
+        # would raise here and abort the consult.
+        text = textio.printable(text)
         if self.color_enabled:
             if self._chunk_run_kind is not None and self._chunk_run_kind != kind:
                 sys.stdout.write(_RESET)
@@ -841,7 +847,8 @@ class TerminalSink:
         available = max(1, columns - len(_THINKING_PREFIX) - 1)
         if len(summary) > available:
             summary = summary[:max(0, available - 1)] + "\u2026"
-        return self._wrap(_THINKING_PREFIX + summary, self._reasoning_color)
+        return self._wrap(textio.printable(_THINKING_PREFIX + summary),
+                          self._reasoning_color)
 
     def _draw_preview(self, summary: str) -> None:
         if self._preview_shown:

@@ -4,7 +4,7 @@ from typing import Callable, Protocol
 from sasha import question
 from sasha import safe_commands
 from sasha import tool_log
-from sasha.llm import ChatClient, ChatResponse
+from sasha.llm import ChatClient
 from sasha.session import Session
 from sasha.executor import Executor
 from sasha.tools import REGISTRY

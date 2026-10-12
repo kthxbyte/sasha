@@ -5,7 +5,6 @@ import json
 import threading
 import urllib.request
 import urllib.error
-from contextlib import contextmanager
 from typing import Callable, Any
 
 from sasha.config import Profile

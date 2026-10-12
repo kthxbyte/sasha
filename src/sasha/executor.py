@@ -424,10 +424,12 @@ class Executor:
         if side_data:
             nul_idx = side_data.find(b"\0")
             if nul_idx >= 0:
-                final_cwd_raw = side_data[:nul_idx].decode().strip()
+                final_cwd_raw = side_data[:nul_idx].decode(
+                    "utf-8", "surrogateescape").strip()
                 if final_cwd_raw:
                     self._cwd = os.path.realpath(final_cwd_raw)
-                env_data = side_data[nul_idx + 1:].decode()
+                env_data = side_data[nul_idx + 1:].decode(
+                    "utf-8", "surrogateescape")
                 self._env = self._parse_export_p(env_data)
 
         if len(err_capture) > self._stderr_capture_bytes:

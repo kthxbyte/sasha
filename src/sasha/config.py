@@ -368,7 +368,7 @@ def load(path: pathlib.Path | None = None) -> Config:
             raise ConfigError(f"config file not found: {path}") from None
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(_DEFAULT_CONFIG_TOML)
+            path.write_text(_DEFAULT_CONFIG_TOML, encoding="utf-8")
         except OSError:
             notice = (f"[sasha] couldn't create {path} — using defaults "
                        f"for this session only")
@@ -386,8 +386,10 @@ def load(path: pathlib.Path | None = None) -> Config:
 
 def set_api_key(path: pathlib.Path, profile_name: str, api_key: str) -> None:
     try:
-        text = path.read_text()
-    except OSError as exc:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        # UnicodeDecodeError is a ValueError, not an OSError, so a config.toml
+        # saved in another encoding would otherwise escape as a raw traceback.
         raise ConfigError(f"couldn't read {path}: {exc}") from exc
 
     lines = text.splitlines(keepends=True)
@@ -421,6 +423,6 @@ def set_api_key(path: pathlib.Path, profile_name: str, api_key: str) -> None:
         lines.insert(end, key_line)
 
     try:
-        path.write_text("".join(lines))
+        path.write_text("".join(lines), encoding="utf-8")
     except OSError as exc:
         raise ConfigError(f"couldn't write {path}: {exc}") from exc

@@ -40,8 +40,16 @@ def compact(max_size_mb: float | None = None) -> CompactionResult:
     with _compaction_lock:
         before_bytes = path.stat().st_size
 
+        try:
+            raw_lines = path.read_text(encoding="utf-8").splitlines()
+        except UnicodeDecodeError:
+            # Compaction REWRITES this file, so reading it with errors="replace"
+            # would write the mangled text back and destroy real entries.
+            # Refusing to compact is the safe outcome: the log just stays big.
+            return CompactionResult(before_bytes, before_bytes, False)
+
         entries = []
-        for line in path.read_text().splitlines():
+        for line in raw_lines:
             if not line:
                 continue
             try:
@@ -65,7 +73,7 @@ def compact(max_size_mb: float | None = None) -> CompactionResult:
         tmp_path = path.with_name(path.name + ".tmp")
         try:
             fd = os.open(str(tmp_path), os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w") as f:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(new_text)
             os.replace(str(tmp_path), str(path))
         except OSError:
@@ -139,7 +147,7 @@ def log_call(*, tool_name: str, call_id: str, arguments: dict,
         }
         line = json.dumps(entry) + "\n"
         fd = os.open(str(path), os.O_CREAT | os.O_WRONLY | os.O_APPEND, 0o600)
-        with os.fdopen(fd, "a") as f:
+        with os.fdopen(fd, "a", encoding="utf-8") as f:
             f.write(line)
     except Exception as exc:
         if not _warned:

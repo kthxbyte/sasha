@@ -53,7 +53,7 @@ def _ensure_memory_dir_at(memory_root: pathlib.Path, *,
     if gitignore:
         gitignore_path = memory_root.parent / ".gitignore"
         gitignore_path.parent.mkdir(parents=True, exist_ok=True)
-        gitignore_path.write_text("*\n")
+        gitignore_path.write_text("*\n", encoding="utf-8")
     memory_root.mkdir(parents=True, exist_ok=True)
     (memory_root / "episodic").mkdir(exist_ok=True)
     return memory_root, True
@@ -74,7 +74,7 @@ def _append_entry_at(memory_root: pathlib.Path, kind: str, text: str,
             "pointer": pointer,
         }
         path = _semantic_path(memory_root)
-        with open(path, "a") as f:
+        with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
         return just_created
 
@@ -101,7 +101,7 @@ def _write_episodic_log_at(memory_root: pathlib.Path, command: str,
         f"--- stdout ---\n{result.stdout_text}\n"
         f"--- stderr ---\n{result.stderr_text}\n"
     )
-    log_path.write_text(content)
+    log_path.write_text(content, encoding="utf-8")
     return str(log_path.relative_to(relative_to))
 
 
@@ -134,7 +134,9 @@ def _load_memory_block_at(memory_root: pathlib.Path,
     if not path.exists():
         return "", 0
     entries = []
-    for line in path.read_text().splitlines():
+    # errors="replace": one undecodable byte in a memory file must not stop
+    # Sasha starting (see ISSUE-072); a mangled character beats a dead REPL.
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         line = line.strip()
         if not line:
             continue
@@ -232,7 +234,8 @@ def _most_recent_gist_at(memory_root: pathlib.Path) -> str | None:
     if not path.exists():
         return None
     last_valid = None
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8",
+                                errors="replace").splitlines():
         line = line.strip()
         if not line:
             continue

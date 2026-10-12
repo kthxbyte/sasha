@@ -7,7 +7,7 @@ import platform
 from typing import Any
 
 from sasha.executor import ExecResult
-from sasha.llm import ChatResponse, ToolCall
+from sasha.llm import ChatResponse
 
 _CONTEXT_MARKER_PREFIX = "[context:"
 

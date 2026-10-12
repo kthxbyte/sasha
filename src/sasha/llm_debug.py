@@ -49,7 +49,7 @@ def log_request(*, profile: str, model: str, messages: list[dict],
         }
         line = json.dumps(entry) + "\n"
         fd = os.open(str(path), os.O_CREAT | os.O_WRONLY | os.O_APPEND, 0o600)
-        with os.fdopen(fd, "a") as f:
+        with os.fdopen(fd, "a", encoding="utf-8") as f:
             f.write(line)
     except Exception as exc:
         if not _warned:

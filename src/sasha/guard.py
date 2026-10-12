@@ -161,7 +161,10 @@ def write_crash_bundle(state_dir: pathlib.Path | None,
             lines.append(f"{key}: {context[key]}")
         lines += ["", "# traceback", tb_text.rstrip(), ""]
 
-        path.write_text("\n".join(lines) + "\n")
+        # errors="replace": the report must be written even if the traceback
+        # holds a surrogate or a byte the locale cannot encode.
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8",
+                        errors="replace")
 
         # A JSON twin, for tooling that would rather not parse the text.
         try:
@@ -173,7 +176,7 @@ def write_crash_bundle(state_dir: pathlib.Path | None,
                 "site": {"file": sig[1], "line": sig[2]},
                 "context": context,
                 "traceback": tb_text,
-            }, indent=2) + "\n")
+            }, indent=2) + "\n", encoding="utf-8")
         except Exception:
             pass
 

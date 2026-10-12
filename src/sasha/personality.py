@@ -44,7 +44,7 @@ def load_personality(path: pathlib.Path | None = None) -> PersonalityResult:
     if not path.exists():
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(DEFAULT_TEMPLATE)
+            path.write_text(DEFAULT_TEMPLATE, encoding="utf-8")
             return PersonalityResult(
                 DEFAULT_TEMPLATE,
                 f"[sasha] created {path} — edit it to customize my tone/character",
@@ -55,7 +55,7 @@ def load_personality(path: pathlib.Path | None = None) -> PersonalityResult:
                 f"[sasha] couldn't create {path} — using the default personality for this session",
             )
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return PersonalityResult(
             DEFAULT_TEMPLATE,

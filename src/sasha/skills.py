@@ -135,7 +135,7 @@ def _discover(root: pathlib.Path | None = None) -> dict[str, pathlib.Path]:
             if not skill_md.is_file():
                 continue
             try:
-                text = skill_md.read_text()
+                text = skill_md.read_text(encoding="utf-8", errors="replace")
             except OSError:
                 continue
             frontmatter = _parse_frontmatter(text)
@@ -154,7 +154,7 @@ def build_skills_listing() -> str:
     entries = []
     for name in sorted(discovered):
         try:
-            text = discovered[name].read_text()
+            text = discovered[name].read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
         frontmatter = _parse_frontmatter(text)
@@ -178,7 +178,7 @@ def load_skill(name: str, args: str = "") -> str | None:
     if path is None:
         return None
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
     if len(text) > _MAX_SKILL_CHARS:

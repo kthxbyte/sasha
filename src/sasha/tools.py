@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
+import os
 import pathlib
 import re
+import stat
+import tempfile
 from typing import Callable
 
 from sasha import memory
@@ -12,6 +16,14 @@ from sasha import skills
 from sasha.executor import Executor
 
 _READ_FILE_MAX_CHARS = 40000
+
+# Files that are not valid UTF-8 are read with errors="replace" rather than
+# refused: a latin-1 text file is more useful read-with-U+FFFD than not read at
+# all, and a binary file read this way is obviously binary. The model is told
+# which happened.
+_REPLACEMENT_CHAR = "\ufffd"
+_NOT_UTF8_NOTICE = ("[note: this file is not valid UTF-8; undecodable bytes are "
+                    "shown as U+FFFD]\n")
 _LIST_DIR_MAX_ENTRIES = 200
 _SEARCH_MAX_MATCHES = 100
 
@@ -50,16 +62,53 @@ def _run_command_result(args: dict, executor: Executor) -> str:
             f"\nstderr:\n{result.stderr_text}")
 
 
+def _atomic_write_text(path: pathlib.Path, content: str) -> None:
+    """Write text without truncating an existing file first (ISSUE-072).
+
+    `Path.write_text` opens with mode "w" -- destroying the old contents
+    immediately -- and only then encodes and writes. Any failure after that
+    point (a surrogate in the content, a full disk, a signal) therefore leaves
+    the previous file gone. For an existing target we write a sibling temp file
+    and `os.replace` it into place, which is atomic, and copy the original mode
+    across so an executable script stays executable. A brand-new file has
+    nothing to lose, so it is written directly and the umask applies as usual.
+    """
+    if not path.exists():
+        path.write_text(content, encoding="utf-8")
+        return
+    mode = stat.S_IMODE(path.stat().st_mode)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent),
+                               prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        # Leave no debris, but never mask the real failure.
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
 def _write_file_handler(args: dict, executor: Executor) -> ToolResult:
     raw_path = args.get("path", "")
     content = args.get("content", "")
     resolved = pathlib.Path(executor.cwd) / raw_path
     try:
         resolved.parent.mkdir(parents=True, exist_ok=True)
-        resolved.write_text(content)
+        _atomic_write_text(resolved, content)
     except OSError as exc:
         return ToolResult(f"error writing {raw_path}: {exc}")
-    return ToolResult(f"wrote {len(content)} bytes to {raw_path}")
+    except UnicodeError as exc:
+        # Reachable from model output, with no unusual locale involved:
+        # json.loads accepts a lone \udXXX escape in tool arguments, and such a
+        # str cannot be encoded to UTF-8. The existing file is untouched because
+        # the write above is atomic, so this is a reportable error, not a crash.
+        return ToolResult(
+            f"error writing {raw_path}: content is not encodable as UTF-8 ({exc})")
+    return ToolResult(
+        f"wrote {len(content.encode('utf-8'))} bytes to {raw_path}")
 
 
 def _read_file_handler(args: dict, executor: Executor) -> ToolResult:
@@ -69,11 +118,16 @@ def _read_file_handler(args: dict, executor: Executor) -> ToolResult:
         return ToolResult(
             f"path escapes the current working directory: {raw_path}")
     try:
-        text = resolved.read_text()
+        # errors="replace" rather than a strict read + UnicodeDecodeError catch:
+        # a model exploring a repository WILL open a .pyc, an image or a zip, and
+        # refusing to read it is a worse answer than showing it is not text.
+        text = resolved.read_text(encoding="utf-8", errors="replace")
     except FileNotFoundError:
         return ToolResult(f"no such file: {raw_path}")
     except OSError as exc:
         return ToolResult(f"error reading {raw_path}: {exc}")
+    if _REPLACEMENT_CHAR in text:
+        text = _NOT_UTF8_NOTICE + text
     if len(text) <= _READ_FILE_MAX_CHARS:
         return ToolResult(text)
     return ToolResult(
@@ -123,7 +177,11 @@ def _search_files_handler(args: dict, executor: Executor) -> ToolResult:
         if file_path.is_dir():
             continue
         try:
-            text = file_path.read_text()
+            # Deliberately STRICT, unlike read_file: search results must not
+            # include garbage matches found inside a .pyc or an image, so a file
+            # whose bytes are not valid UTF-8 is skipped rather than replaced.
+            # Pinned by test_ac_search_files_skips_binary_files.
+            text = file_path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
