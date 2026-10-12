@@ -114,7 +114,7 @@ api_key = ""
 api_key_required = true
 
 [profiles.local]
-base_url = "http://192.168.8.253:11441/v1"
+base_url = "http://192.168.8.253:11434/v1"
 model = "local"
 api_key = ""
 api_key_required = false
@@ -173,8 +173,10 @@ Four profiles are configured by default:
 - **openai** — the right endpoint and model, no key yet.
 - **deepseek** — the right endpoint and model; also reads `DEEPSEEK_API_KEY`
   from the environment if set.
-- **local** — for a local llama.cpp server at `192.168.8.253:11441`. No API
-  key required.
+- **local** — for a local llama.cpp server at `192.168.8.253:11434`. No API
+  key required. Note that llama.cpp ignores the `model` field (it serves
+  whatever it has loaded), so `model = "local"` works as-is; set it to the
+  GGUF id only if your server is strict about it.
 
 Switch profiles at runtime with `sasha profile <name>`. If the profile needs
 a key it doesn't have (`api_key_required = true` and no key set), Sasha asks

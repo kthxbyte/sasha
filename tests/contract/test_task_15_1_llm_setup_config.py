@@ -64,7 +64,10 @@ def test_ac1_all_four_profiles_present_with_correct_fields(isolated_env):
     assert deepseek.api_key_required is True
 
     local = cfg.profiles["local"]
-    assert local.base_url == "http://192.168.8.253:11441/v1"
+    # Amended by Tier 1 (2026-10-12): the shipped `local` default port was
+    # 11441, which does not reach the llama.cpp server actually in use — a
+    # measured HTTP 200 only on 11434. The default now matches reality.
+    assert local.base_url == "http://192.168.8.253:11434/v1"
     assert local.model == "local"
     assert local.api_key_required is False
 

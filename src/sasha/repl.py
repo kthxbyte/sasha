@@ -15,7 +15,7 @@ from typing import Protocol
 import sasha.config as config
 from sasha.activity_indicator import ActivityIndicator
 from sasha.agent import run_consult
-from sasha.llm import ChatError
+from sasha.llm import ChatError, background_request
 from sasha import directory_recap
 from sasha import guard
 from sasha import memory
@@ -482,8 +482,11 @@ class Repl:
         try:
             prompt = self._build_bootstrap_prompt(history, docs)
             client = self._client_factory(self._current_profile)
-            response = client.chat(
-                [{"role": "user", "content": prompt}], [], lambda _: None)
+            # Best-effort: the user's own question always wins over building
+            # initial context in the background.
+            with background_request():
+                response = client.chat(
+                    [{"role": "user", "content": prompt}], [], lambda _: None)
             lines = self._parse_bootstrap_lines(response.text)
         except ChatError:
             lines = []

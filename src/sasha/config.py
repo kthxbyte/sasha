@@ -94,7 +94,7 @@ _DEFAULT_PROFILE_FIELDS_BY_NAME = {
         "api_key_required": True,
     },
     "local": {
-        "base_url": "http://192.168.8.253:11441/v1",
+        "base_url": "http://192.168.8.253:11434/v1",
         "model": "local",
         "api_key_env": "",
         "api_key": "",
@@ -153,7 +153,7 @@ api_key = ""
 api_key_required = true
 
 [profiles.local]
-base_url = "http://192.168.8.253:11441/v1"
+base_url = "http://192.168.8.253:11434/v1"
 model = "local"
 api_key = ""
 api_key_required = false

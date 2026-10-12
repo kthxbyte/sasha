@@ -47,7 +47,9 @@ def test_ac1_defaults_when_no_config_file(isolated_env):
 
     lo = cfg.profiles["local"]
     assert lo.name == "local"
-    assert lo.base_url == "http://192.168.8.253:11441/v1"
+    # Amended by Tier 1 (2026-10-12): shipped default port corrected
+    # 11441 -> 11434 to match the llama.cpp server in use.
+    assert lo.base_url == "http://192.168.8.253:11434/v1"
     assert lo.model == "local"
     assert lo.api_key == ""
 

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from sasha import tool_log
-from sasha.llm import ChatError
+from sasha.llm import ChatError, background_request
 
 SILENT = "silent"
 RECAP_DIRECT = "recap_direct"
@@ -290,8 +290,11 @@ def escalate_async(target: pathlib.Path, client_factory, profile,
         prompt = build_prompt(context)
         try:
             client = client_factory(profile)
-            response = client.chat(
-                [{"role": "user", "content": prompt}], [], lambda _: None)
+            # Best-effort: skipped, or abandoned mid-stream, the moment the
+            # user asks something of their own.
+            with background_request():
+                response = client.chat(
+                    [{"role": "user", "content": prompt}], [], lambda _: None)
         except ChatError:
             return
         text = response.text.strip()
