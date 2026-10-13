@@ -25,7 +25,7 @@ def run_consult(
     on_status: Callable[[str], None] | None = None,
     on_warning: Callable[[str], None] | None = None,
     on_async_status: Callable[[str], None] | None = None,
-    max_tool_turns: int = 10,
+    max_tool_turns: int = 50,
     on_phase: Callable[[str | None], None] = lambda phase: None,
     questioner: question.Questioner | None = None,
 ) -> None:

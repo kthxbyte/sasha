@@ -122,7 +122,8 @@ api_key_required = false
 [limits]
 history_tokens = 12000
 stderr_capture_bytes = 8192
-max_tool_turns = 10
+max_tool_turns = 50
+max_reasoning_chars = 8000
 
 [safe_commands]
 sensitive_paths = [
@@ -164,7 +165,7 @@ enabled = false
 
 `[limits]` is written by the self-installed file with the built-in defaults
 shown in the example above; drop the keys you don't need, or delete the whole
-table to fall back to the same defaults. `max_tool_turns` (10 by default) is
+table to fall back to the same defaults. `max_tool_turns` (50 by default) is
 the ceiling on tool calls in one consult — raise it if Sasha stops mid-task
 with `[sasha] stopping: hit the 10-action limit`.
 
@@ -672,14 +673,32 @@ you can tell them apart at a glance:
   [sasha] stopping: repeated identical action — <action>
   ```
 - **Turn-limit exhaustion** — the loop reaches the maximum tool-turn limit
-  for one consult (10 by default; raise it with `max_tool_turns` under
+  for one consult (50 by default; raise it with `max_tool_turns` under
   `[limits]` in `config.toml`):
   ```
-  [sasha] stopping: hit the 10-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress
+  [sasha] stopping: hit the 50-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress
+  ```
+- **The model reasoned without ever answering** — a response that streams
+  `max_reasoning_chars` of reasoning (8,000 by default) while producing no
+  content at all is cut off. This is the failure mode actually observed on the
+  local model: an ordinary question finishes thinking in ~500 characters, while
+  a prompt it cannot settle streamed 18,000 and was still going, with no answer
+  in sight. No text statistic distinguishes the two — the stuck text is no more
+  repetitive by any measure than healthy reasoning — so the only reliable signal
+  is that no answer has appeared yet:
+  ```
+  [sasha] llm: stopped the model — it streamed 8,000 characters of reasoning without producing any answer. Raise max_reasoning_chars under [limits] in config.toml if this is real progress.
+  ```
+- **The model started repeating itself verbatim** — a second, cheaper net for
+  the classic degenerate loop, watched in both the answer and the reasoning:
+  ```
+  [sasha] llm: stopped the model mid-stream — it had begun repeating itself, so the answer above is truncated. Ask again or narrow the question.
   ```
 
-Either way, the agent does one final text-only call so the LLM can answer
-or explain without proposing further commands.
+The loop guards do one final text-only call so the LLM can answer or explain
+without proposing further commands. The repetition guard instead ends the turn
+where it stands, and any tool call that was half-assembled at that moment is
+discarded rather than executed.
 
 ## Error vocabulary (reference)
 
@@ -691,6 +710,8 @@ Command output is never prefixed or altered.
 | LLM unreachable | `[sasha] <profile> unreachable: <reason> — 'sasha profile <name>' to switch` |
 | Loop stopped (repetition) | `[sasha] stopping: repeated identical action — <action>` |
 | Loop stopped (turn limit) | `[sasha] stopping: hit the N-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress` |
+| Model repeating itself | `[sasha] llm: stopped the model mid-stream — it had begun repeating itself, so the answer above is truncated. Ask again or narrow the question.` |
+| Reasoning never answered | `[sasha] llm: stopped the model — it streamed <N> characters of reasoning without producing any answer. Raise max_reasoning_chars under [limits] in config.toml if this is real progress.` |
 | Profile switch | `[sasha] profile: <name> (<model> @ <base_url>)` |
 | Ctrl+Z | `[sasha] Ctrl+Z not supported — command terminated` |
 | Project switch | `[sasha] project: <name> (<N> memories, last: "<gist>")` |

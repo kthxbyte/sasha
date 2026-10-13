@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import pathlib
 import threading
 import time
 import urllib.request

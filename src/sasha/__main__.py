@@ -253,7 +253,8 @@ def _run(args, repair_mode: bool = False) -> int:
     if repair_mode:
         session.set_repair_context(_REPAIR_BRIEF, repair_crash)
 
-    client_factory = lambda p: ChatClient(p)
+    client_factory = lambda p: ChatClient(
+        p, max_reasoning_chars=limits.max_reasoning_chars)
 
     sink = TerminalSink(sasha_color=prompt_mod.COLOR_TOKENS[config.sasha_color],
                         reasoning_color=prompt_mod.COLOR_TOKENS[config.reasoning_color],

@@ -8,8 +8,6 @@ ISSUE-069, and these tests pin both the surviving behaviour and the removal.
 
 from __future__ import annotations
 
-import dataclasses
-import os
 import pathlib
 import subprocess
 

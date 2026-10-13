@@ -10,16 +10,12 @@ and the same endpoint stays usable interactively.
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import os
 import pathlib
-import sys
-import tomllib
 
 import pytest
 
 from sasha import config as config_mod
-from sasha import guard
 from sasha import __main__ as main_mod
 from sasha.session import Session
 

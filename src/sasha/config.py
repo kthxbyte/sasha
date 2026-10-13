@@ -23,7 +23,13 @@ class Profile:
 class Limits:
     history_tokens: int = 12000
     stderr_capture_bytes: int = 8192
-    max_tool_turns: int = 10
+    max_tool_turns: int = 50
+    # Stop a response that streams this much reasoning without producing any
+    # answer at all (ISSUE-073). Measured on the local 26B: an ordinary question
+    # terminates after ~500 characters of reasoning, while a prompt it cannot
+    # settle streamed 18,000 and was still going, with zero content. See
+    # sasha/repetition.py for why no text-statistic test can separate the two.
+    max_reasoning_chars: int = 8000
 
 
 # How much of the model's reasoning the terminal shows. "compact" draws one
@@ -105,6 +111,7 @@ _VALID_LIMITS_FIELDS = {
     "history_tokens",
     "stderr_capture_bytes",
     "max_tool_turns",
+    "max_reasoning_chars",
 }
 
 _DEFAULT_CONFIG_TOML = """\
@@ -159,10 +166,20 @@ api_key_required = false
 # an undiscoverable knob is the same as no knob: max_tool_turns in particular
 # is the answer to 'why did it stop mid-task?', and it used to be invisible
 # unless you already knew the key existed (ISSUE-052/ISSUE-063).
+#
+# 50, not 10 (ISSUE-073): real work -- read a few files, search, edit, run the
+# tests, fix, run them again -- routinely needs 20-40 actions, so 10 stopped
+# Sasha mid-task rather than protecting it. This is a backstop against a runaway
+# loop, not a budget; verbatim loops are caught directly now by the repetition
+# guard, which watches the stream itself rather than counting turns.
 [limits]
 history_tokens = 12000
 stderr_capture_bytes = 8192
-max_tool_turns = 10
+max_tool_turns = 50
+# A response that reasons for this many characters without producing any answer
+# is cut off (ISSUE-073). Raise it if a hard question legitimately needs a
+# longer think before it starts answering.
+max_reasoning_chars = 8000
 
 [safe_commands]
 sensitive_paths = [

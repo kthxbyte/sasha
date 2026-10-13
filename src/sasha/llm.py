@@ -9,6 +9,7 @@ from typing import Callable, Any
 
 from sasha.config import Profile
 from sasha import llm_debug
+from sasha.repetition import RepetitionDetector
 
 # One in-flight request at a time, process-wide.
 #
@@ -43,6 +44,9 @@ class ToolCall:
 class ChatResponse:
     text: str
     tool_calls: list[ToolCall]
+    # None normally; "repetition" when the stream was cut short because the
+    # model had begun repeating itself (see sasha/repetition.py).
+    stopped_reason: str | None = None
 
 class ChatError(Exception):
     def __init__(self, reason: str):
@@ -53,9 +57,12 @@ class ChatError(Exception):
         return self.reason
 
 class ChatClient:
-    def __init__(self, profile: Profile, timeout_s: float = 120.0) -> None:
+    def __init__(self, profile: Profile, timeout_s: float = 120.0,
+                 max_reasoning_chars: int = 0) -> None:
         self.profile = profile
         self.timeout_s = timeout_s
+        # 0 disables the budget; see _reasoning_budget_tripped below.
+        self.max_reasoning_chars = max_reasoning_chars
 
     def chat(self, messages: list[dict], tools: list[dict], 
              on_text: Callable[[str], None],
@@ -91,6 +98,12 @@ class ChatClient:
                     full_text = ""
                     tool_call_fragments: dict[int, dict[str, Any]] = {}
                     done_seen = False
+                    stopped_reason = None
+                    reasoning_chars = 0
+                    # Separate detectors: a model can loop in its visible answer
+                    # or in its reasoning, and each degenerates independently.
+                    content_guard = RepetitionDetector()
+                    reasoning_guard = RepetitionDetector()
 
                     for line_bytes in response:
                         line = line_bytes.decode("utf-8").strip()
@@ -122,9 +135,21 @@ class ChatClient:
                             content = delta["content"]
                             full_text += content
                             on_text(content)
+                            if content_guard.feed(content):
+                                stopped_reason = "repetition"
+                                break
 
                         if "reasoning_content" in delta and delta["reasoning_content"]:
-                            on_reasoning(delta["reasoning_content"])
+                            reasoning = delta["reasoning_content"]
+                            on_reasoning(reasoning)
+                            reasoning_chars += len(reasoning)
+                            if reasoning_guard.feed(reasoning):
+                                stopped_reason = "repetition"
+                                break
+                            if self._reasoning_budget_tripped(reasoning_chars,
+                                                              bool(full_text)):
+                                stopped_reason = "reasoning_budget"
+                                break
 
                         if "tool_calls" in delta:
                             for tc_delta in delta["tool_calls"]:
@@ -143,6 +168,27 @@ class ChatClient:
                                         tool_call_fragments[index]["name"] = tc_delta["function"]["name"]
                                     if "arguments" in tc_delta["function"] and tc_delta["function"]["arguments"] is not None:
                                         tool_call_fragments[index]["args_parts"].append(tc_delta["function"]["arguments"])
+
+                    if stopped_reason is not None:
+                        # Cut short on purpose: say why, and drop any tool call
+                        # we were mid-way through assembling. A stream we
+                        # abandoned is not evidence of a complete call, and
+                        # guessing into an execution is the one thing worse than
+                        # a truncated answer.
+                        if stopped_reason == "repetition":
+                            _warn(
+                                "[sasha] llm: stopped the model mid-stream — it "
+                                "had begun repeating itself, so the answer above "
+                                "is truncated. Ask again or narrow the question.")
+                        else:
+                            _warn(
+                                f"[sasha] llm: stopped the model — it streamed "
+                                f"{reasoning_chars:,} characters of reasoning "
+                                f"without producing any answer. Raise "
+                                f"max_reasoning_chars under [limits] in "
+                                f"config.toml if this is real progress.")
+                        return ChatResponse(text=full_text, tool_calls=[],
+                                            stopped_reason=stopped_reason)
 
                     if not done_seen:
                         raise ChatError("Stream ended before [DONE] was received")
@@ -194,3 +240,20 @@ class ChatClient:
             raise
         except Exception as exc:
             raise ChatError(f"Unexpected error: {str(exc)}")
+
+    def _reasoning_budget_tripped(self, reasoning_chars: int,
+                                  produced_content: bool) -> bool:
+        """True once a response has thought for too long without answering.
+
+        Measured on the local 26B at ISSUE-073 (see sasha/repetition.py): an
+        ordinary question terminates after about 500 characters of reasoning,
+        while a prompt the model cannot settle streamed 18,000 characters with no
+        content at all and was still going. Text statistics do NOT separate the
+        two cases -- the stuck reasoning compressed and repeated about the same
+        as healthy reasoning -- so the only reliable signal is that no answer has
+        appeared. Once content starts this stops watching: the model is making
+        progress, and a long think before an answer is not the failure mode.
+        """
+        if self.max_reasoning_chars <= 0 or produced_content:
+            return False
+        return reasoning_chars > self.max_reasoning_chars

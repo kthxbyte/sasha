@@ -60,7 +60,12 @@ def test_ac1_default_limits(isolated_env):
     lim = load(None).limits
     assert lim.history_tokens == 12000
     assert lim.stderr_capture_bytes == 8192
-    assert lim.max_tool_turns == 10
+    # Amended by Tier 1 (2026-10-12, ISSUE-073): 10 -> 50. Ten was too few to
+    # finish real work (read files, search, edit, run tests, fix, re-run easily
+    # passes 20 actions), so it interrupted tasks instead of protecting them.
+    # The loop it was meant to stop is now caught by the repetition guard in
+    # llm.py, which watches the streamed text rather than counting turns.
+    assert lim.max_tool_turns == 50
     # Amended by Tier 1 (2026-10-12): `mute_threshold` was removed with the
     # trigger-economy inversion (ISSUE-067) — there are no offers to mute.
     assert not hasattr(lim, "mute_threshold")
