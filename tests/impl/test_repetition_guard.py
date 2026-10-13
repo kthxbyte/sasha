@@ -140,18 +140,17 @@ class _FakeResponse:
         return False
 
 
-def _client(max_reasoning_chars=0):
+def _client(max_think_seconds=0):
     from sasha.config import Profile
     from sasha.llm import ChatClient
 
     return ChatClient(Profile(name="p", base_url="http://stub/v1",
                               model="m", api_key=""), timeout_s=5.0,
-                      max_reasoning_chars=max_reasoning_chars)
+                      max_think_seconds=max_think_seconds)
 
 
-def _run(monkeypatch, chunks, max_reasoning_chars=0):
+def _run(monkeypatch, chunks, max_think_seconds=0, clock=None):
     import urllib.request
-
 
     body = _sse(chunks)
     monkeypatch.setattr(urllib.request, "urlopen",
@@ -159,9 +158,11 @@ def _run(monkeypatch, chunks, max_reasoning_chars=0):
     warnings = []
     text = []
     reasoning = []
-    response = _client(max_reasoning_chars).chat([], [], text.append,
-                                                 reasoning.append,
-                                                 warnings.append)
+    client = _client(max_think_seconds)
+    if clock is not None:
+        client._now = clock
+    response = client.chat([], [], text.append, reasoning.append,
+                           warnings.append)
     return response, warnings, "".join(text)
 
 
@@ -242,83 +243,95 @@ def test_documented_turn_cap_matches_the_code():
 
 
 # ==========================================================================
-# The reasoning budget -- the failure mode actually measured on the local model
+# The patience budget -- the failure mode actually measured on the local model
 # ==========================================================================
 
-def test_reasoning_budget_stops_an_endless_think_with_no_answer(monkeypatch):
-    """Measured on the local 26B: "Explain how a PTY works between a shell
-    wrapper and vim" streamed 17,882 characters of reasoning, produced NO
-    content, and was still going. Verbatim repetition never happened, so the
-    repetition detector alone does not catch it."""
-    chunks = [{"reasoning_content": "x" * 100} for _ in range(400)]   # 40k
-    chunks += [{"content": "never reached"}]
+def _fake_clock(*values):
+    """A monotonic clock that returns the given values in order (then holds)."""
+    seq = list(values)
 
-    response, warnings, streamed = _run(monkeypatch, chunks,
-                                        max_reasoning_chars=8000)
+    def now():
+        return seq.pop(0) if len(seq) > 1 else seq[0]
 
-    assert response.stopped_reason == "reasoning_budget"
+    return now
+
+
+def test_think_budget_stops_an_endless_think_with_no_answer(monkeypatch):
+    """Measured on the local 26B: both "Explain how a PTY works between a shell
+    wrapper and vim" and "list every stdlib module, be thorough" streamed
+    13,000-18,000 characters of reasoning, produced NO content, and were still
+    going at 150s. Verbatim repetition never happened -- the stuck text varies
+    at the character level -- so the repetition detector alone misses this."""
+    chunks = [{"reasoning_content": "thinking. "} for _ in range(400)]
+
+    response, warnings, streamed = _run(
+        monkeypatch, chunks, max_think_seconds=180,
+        clock=_fake_clock(1000.0, 1000.5, 1300.0))     # jumps past the budget
+
+    assert response.stopped_reason == "thinking_budget"
     assert streamed == ""                       # no answer was ever produced
-    assert any("characters of reasoning" in w for w in warnings)
-    assert any("max_reasoning_chars" in w for w in warnings)
+    assert any("reasoned" in w for w in warnings)
+    assert any("max_think_seconds" in w for w in warnings)
 
 
-def test_reasoning_budget_also_cuts_a_think_that_would_have_answered(monkeypatch):
-    """The accepted cost of a budget, stated as a test.
+def test_a_legitimate_long_think_is_not_cut(monkeypatch):
+    """The regression this budget was rewritten for. Measured: the SAME PTY
+    question phrased as "in three sentences" answered after 4,241 characters of
+    reasoning and 29.4 seconds. A character budget of 8,000 had under 2x
+    headroom over that and would cut a thinking model short; 180 seconds of
+    patience does not."""
+    chunks = [{"reasoning_content": "y" * 500} for _ in range(40)]   # 20k chars
+    chunks += [{"content": "Here is the answer."} for _ in range(10)]
 
-    At 8,000 characters there is no way to tell "an answer is coming at 9,000"
-    from "this never ends" -- the measurements show the two look statistically
-    identical (see sasha/repetition.py). So a very long think is cut off even
-    though an answer would have arrived, and the message says how to raise the
-    limit. Bounded-but-curt beats unbounded.
-    """
-    chunks = [{"reasoning_content": "x" * 1000} for _ in range(30)]   # 30k
-    chunks += [{"content": "Here is the answer."} for _ in range(30)]
+    # the whole think takes 40s of wall clock -- well inside the budget
+    response, warnings, streamed = _run(
+        monkeypatch, chunks, max_think_seconds=180,
+        clock=_fake_clock(1000.0, 1040.0))
 
-    response, warnings, streamed = _run(monkeypatch, chunks,
-                                        max_reasoning_chars=8000)
-
-    assert response.stopped_reason == "reasoning_budget"
-    assert streamed == ""                      # the answer was never reached
-    assert any("max_reasoning_chars" in w for w in warnings)
+    assert response.stopped_reason is None
+    assert warnings == []
+    assert streamed.startswith("Here is the answer.")
 
 
-def test_reasoning_budget_stops_watching_once_content_starts(monkeypatch):
-    """After the answer begins, reasoning is no longer budgeted -- the model is
-    demonstrably making progress, which is the signal the budget exists to find.
-    """
+def test_think_budget_stops_watching_once_content_starts(monkeypatch):
+    """After the answer begins, the clock is irrelevant: the model is
+    demonstrably making progress."""
     chunks = [{"content": "Starting the answer. "}]
-    chunks += [{"reasoning_content": "y" * 1000} for _ in range(40)]   # 40k
+    chunks += [{"reasoning_content": "y" * 500} for _ in range(40)]
 
-    response, _, streamed = _run(monkeypatch, chunks, max_reasoning_chars=8000)
+    response, _, streamed = _run(monkeypatch, chunks, max_think_seconds=180,
+                                 clock=_fake_clock(1000.0, 9999.0))
 
     assert response.stopped_reason is None
     assert streamed.startswith("Starting the answer. ")
 
 
-def test_reasoning_budget_is_off_when_zero(monkeypatch):
-    """0 disables it, which is what the tests and library callers get."""
-    chunks = [{"reasoning_content": "x" * 1000} for _ in range(50)]
+def test_think_budget_is_off_when_zero(monkeypatch):
+    """0 disables it, which is what library callers and these tests default to."""
+    chunks = [{"reasoning_content": "x" * 500} for _ in range(50)]
 
-    response, _, _ = _run(monkeypatch, chunks, max_reasoning_chars=0)
+    response, _, _ = _run(monkeypatch, chunks, max_think_seconds=0,
+                          clock=_fake_clock(1000.0, 9999.0))
+
+    assert response.stopped_reason is None
+
+
+def test_think_clock_starts_at_the_first_reasoning_chunk(monkeypatch):
+    """A slow prompt-processing phase must not be charged to the model: the
+    clock only starts once reasoning is actually flowing."""
+    chunks = [{"reasoning_content": "short think. "}]
+    chunks += [{"content": "Answer."}]
+
+    # first call is the start mark; 5000s of "prompt processing" precedes it
+    response, _, _ = _run(monkeypatch, chunks, max_think_seconds=180,
+                          clock=_fake_clock(5000.0, 5001.0))
 
     assert response.stopped_reason is None
 
 
-def test_ordinary_reasoning_is_far_below_the_default_budget(monkeypatch):
-    """The default must not fire on healthy work: measured healthy reasoning
-    for a small factual question is ~526 characters."""
-    chunks = [{"reasoning_content": "Let me think. "} for _ in range(30)]  # ~450
-    chunks += [{"content": "termios.tcsetattr applies terminal attributes."}]
-
-    response, warnings, _ = _run(monkeypatch, chunks, max_reasoning_chars=8000)
-
-    assert response.stopped_reason is None
-    assert warnings == []
-
-
-def test_shipped_reasoning_budget_matches_the_documented_default():
+def test_shipped_think_budget_matches_the_documented_default():
     from sasha import config
 
-    budget = config.Limits().max_reasoning_chars
-    assert budget == 8000
-    assert f"max_reasoning_chars = {budget}" in config._DEFAULT_CONFIG_TOML
+    budget = config.Limits().max_think_seconds
+    assert budget == 180
+    assert f"max_think_seconds = {budget}" in config._DEFAULT_CONFIG_TOML

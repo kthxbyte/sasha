@@ -24,12 +24,12 @@ class Limits:
     history_tokens: int = 12000
     stderr_capture_bytes: int = 8192
     max_tool_turns: int = 50
-    # Stop a response that streams this much reasoning without producing any
-    # answer at all (ISSUE-073). Measured on the local 26B: an ordinary question
-    # terminates after ~500 characters of reasoning, while a prompt it cannot
-    # settle streamed 18,000 and was still going, with zero content. See
-    # sasha/repetition.py for why no text-statistic test can separate the two.
-    max_reasoning_chars: int = 8000
+    # How long a response may reason before producing any answer at all, in
+    # seconds (ISSUE-073). Seconds rather than characters because this is a
+    # patience limit, not a judgement about how much a thinking model should
+    # think: the local endpoint serves four slots, so its character rate varies
+    # with load, while how long you are willing to wait does not.
+    max_think_seconds: int = 180
 
 
 # How much of the model's reasoning the terminal shows. "compact" draws one
@@ -111,7 +111,7 @@ _VALID_LIMITS_FIELDS = {
     "history_tokens",
     "stderr_capture_bytes",
     "max_tool_turns",
-    "max_reasoning_chars",
+    "max_think_seconds",
 }
 
 _DEFAULT_CONFIG_TOML = """\
@@ -176,10 +176,11 @@ api_key_required = false
 history_tokens = 12000
 stderr_capture_bytes = 8192
 max_tool_turns = 50
-# A response that reasons for this many characters without producing any answer
-# is cut off (ISSUE-073). Raise it if a hard question legitimately needs a
-# longer think before it starts answering.
-max_reasoning_chars = 8000
+# A response that reasons for this many SECONDS without producing any answer is
+# cut off (ISSUE-073). Measured on the local 26B: a bounded question reached its
+# answer after 29s of thinking, while an unbounded one reasoned for 150s+ with no
+# answer in sight. Ctrl+C is always immediate; this is only the automatic stop.
+max_think_seconds = 180
 
 [safe_commands]
 sensitive_paths = [

@@ -123,7 +123,7 @@ api_key_required = false
 history_tokens = 12000
 stderr_capture_bytes = 8192
 max_tool_turns = 50
-max_reasoning_chars = 8000
+max_think_seconds = 180
 
 [safe_commands]
 sensitive_paths = [
@@ -678,16 +678,19 @@ you can tell them apart at a glance:
   ```
   [sasha] stopping: hit the 50-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress
   ```
-- **The model reasoned without ever answering** — a response that streams
-  `max_reasoning_chars` of reasoning (8,000 by default) while producing no
-  content at all is cut off. This is the failure mode actually observed on the
-  local model: an ordinary question finishes thinking in ~500 characters, while
-  a prompt it cannot settle streamed 18,000 and was still going, with no answer
-  in sight. No text statistic distinguishes the two — the stuck text is no more
-  repetitive by any measure than healthy reasoning — so the only reliable signal
-  is that no answer has appeared yet:
+- **The model reasoned without ever answering** — a response that reasons for
+  `max_think_seconds` (180 by default) while producing no content at all is cut
+  off. This is the failure mode actually observed on the local model: the same
+  question bounded ("in three sentences") answered after 29 seconds of thinking,
+  while unbounded ("explain how a PTY works", "list every … be thorough") it
+  streamed 13,000–18,000 characters and never answered at all. No text statistic
+  distinguishes the two — the stuck text is no more repetitive by any measure
+  than healthy reasoning — so the only reliable signal is that no answer has
+  appeared. It is a patience limit, not a cap on thinking, and seconds rather
+  than characters because this endpoint serves four slots and its speed varies
+  with load. Ctrl+C remains immediate:
   ```
-  [sasha] llm: stopped the model — it streamed 8,000 characters of reasoning without producing any answer. Raise max_reasoning_chars under [limits] in config.toml if this is real progress.
+  [sasha] llm: stopped the model — it reasoned for 180s (22,140 characters) without producing any answer. Raise max_think_seconds under [limits] in config.toml if this is real progress.
   ```
 - **The model started repeating itself verbatim** — a second, cheaper net for
   the classic degenerate loop, watched in both the answer and the reasoning:
@@ -711,7 +714,7 @@ Command output is never prefixed or altered.
 | Loop stopped (repetition) | `[sasha] stopping: repeated identical action — <action>` |
 | Loop stopped (turn limit) | `[sasha] stopping: hit the N-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress` |
 | Model repeating itself | `[sasha] llm: stopped the model mid-stream — it had begun repeating itself, so the answer above is truncated. Ask again or narrow the question.` |
-| Reasoning never answered | `[sasha] llm: stopped the model — it streamed <N> characters of reasoning without producing any answer. Raise max_reasoning_chars under [limits] in config.toml if this is real progress.` |
+| Reasoning never answered | `[sasha] llm: stopped the model — it reasoned for <N>s (<M> characters) without producing any answer. Raise max_think_seconds under [limits] in config.toml if this is real progress.` |
 | Profile switch | `[sasha] profile: <name> (<model> @ <base_url>)` |
 | Ctrl+Z | `[sasha] Ctrl+Z not supported — command terminated` |
 | Project switch | `[sasha] project: <name> (<N> memories, last: "<gist>")` |

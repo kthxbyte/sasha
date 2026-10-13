@@ -8,11 +8,19 @@ that anything is wrong.
 **What the measurements actually showed** (local 26B,
 dealignai/Bonsai-2-27B-Ternary, 2026-10-12):
 
-| prompt | terminated | reasoning | content |
-|---|---|---|---|
-| "What does termios.tcsetattr do?" | yes | 526 chars | 256 chars |
-| "Explain how a PTY works between a shell wrapper and vim" | **no** | 17,882 | **0** |
-| "List every stdlib module ... be thorough" | **no** | 18,663 | **0** |
+| prompt | terminated | reasoning | content | time to answer |
+|---|---|---|---|---|
+| "What does termios.tcsetattr do?" | yes | 526 chars | 256 chars | 3.8s |
+| "Name three stdlib modules for terminal handling" | yes | 919 | 321 | 7.4s |
+| "Explain in three sentences how a PTY works ..." | yes | **4,241** | 520 | **29.4s** |
+| "Explain how a PTY works between a shell wrapper and vim" | **no** | 17,882 | **0** | never |
+| "List every stdlib module ... be thorough" | **no** | 18,663 | **0** | never |
+
+Note the pair in the middle: the *same question*, bounded, terminates and answers
+after 4,241 characters of thinking. The unbounded phrasing never answers. So the
+loop is provoked by open-ended enumeration, not by difficulty -- and legitimate
+thinking on this model is easily 4,000+ characters, which is why the guard is a
+patience limit in seconds rather than a character budget for thought.
 
 Two conclusions, and the second is the important one:
 
@@ -29,11 +37,13 @@ Two conclusions, and the second is the important one:
    *more* repetitive than the loop. Compression, entropy and n-gram novelty all
    fail to discriminate.
 
-So the effective guard is not a cleverness test but a **budget**: see
-`ChatClient._reasoning_budget_tripped`, which cuts a response that has streamed
-`max_reasoning_chars` of reasoning without producing any content at all. That
-fires on both failures above and on nothing healthy measured. Bounded-but-curt
-beats unbounded.
+So the effective guard is not a cleverness test but a **patience limit**: see
+`ChatClient._think_budget_tripped`, which cuts a response that has reasoned for
+`max_think_seconds` (180 by default) without producing any content at all.
+Seconds rather than characters because this endpoint serves four slots and its
+character rate varies with load, while the user's willingness to wait does not.
+That fires on every failure above and on nothing healthy measured -- the longest
+legitimate think observed was 29 seconds.
 
 Both guards live in `llm.chat()` because that is the one place every streamed
 chunk passes through: the agent loop, `??` chat mode and `sasha repair` all
