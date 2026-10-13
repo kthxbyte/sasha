@@ -197,6 +197,26 @@ class Session:
             final_user_msg = ({"role": "user", "content": context_block}
                                if self.notes else None)
 
+        # Pin the TASK (ISSUE-077). Trimming below pops from the front, so in a
+        # long tool run the user's request -- the oldest message there is -- was
+        # the very first thing discarded, leaving the model executing with no
+        # record of what it had been asked to do. Verified before fixing: with a
+        # 2000-token budget and 40 tool turns, the task was gone and the only
+        # user message left was "[context:cwd]".
+        #
+        # The MOST RECENT real user message is pinned rather than the first, so
+        # that in a REPL session the pin moves to the current question instead of
+        # holding an hour-old request forever. When a user message is already
+        # pending it is in `trailing` and needs no pin at all.
+        pinned_task = None
+        if not has_pending_user:
+            for idx in range(len(history_to_trim) - 1, -1, -1):
+                candidate = history_to_trim[idx]
+                if (candidate.get("role") == "user"
+                        and not _is_context_marker(candidate)):
+                    pinned_task = history_to_trim.pop(idx)
+                    break
+
         def get_current_total_estimate() -> int:
             total = sum(self._estimate_tokens(m) for m in history_to_trim)
             total += math.ceil(len(base_text) / 4)
@@ -209,7 +229,10 @@ class Session:
                 history_to_trim = [m for m in history_to_trim if not (m.get("role") == "tool" and m.get("tool_call_id") in tool_call_ids)]
 
         trailing = [final_user_msg] if final_user_msg is not None else []
-        messages = [self.system_prompt_dict()] + history_to_trim + trailing
+        leading = [self.system_prompt_dict()]
+        if pinned_task is not None:
+            leading.append(pinned_task)
+        messages = leading + history_to_trim + trailing
         self.notes = []
         return messages
 
