@@ -680,7 +680,9 @@ you can tell them apart at a glance:
   ```
 - **The model reasoned without ever answering** — a response that reasons for
   `max_think_seconds` (180 by default) while producing no content at all is cut
-  off. This is the failure mode actually observed on the local model: the same
+  off. **Do not lower this**: with the system-prompt guidance below in place,
+  legitimate thinking on the local 26B was measured reaching 136 seconds, so 180
+  is close to the floor rather than a generous ceiling. This is the failure mode actually observed on the local model: the same
   question bounded ("in three sentences") answered after 29 seconds of thinking,
   while unbounded ("explain how a PTY works", "list every … be thorough") it
   streamed 13,000–18,000 characters and never answered at all. No text statistic
