@@ -91,6 +91,20 @@ def _atomic_write_text(path: pathlib.Path, content: str) -> None:
         raise
 
 
+def _content_bytes(content: str) -> int:
+    """UTF-8 byte length, which is what "bytes" should mean.
+
+    `len(str)` is a character count; for accented text it understates the file
+    size the user is being asked to approve. A lone surrogate cannot be encoded
+    at all, so fall back to the character count -- the write itself will report
+    the real error.
+    """
+    try:
+        return len(content.encode("utf-8"))
+    except UnicodeEncodeError:
+        return len(content)
+
+
 def _write_file_handler(args: dict, executor: Executor) -> ToolResult:
     raw_path = args.get("path", "")
     content = args.get("content", "")
@@ -107,8 +121,7 @@ def _write_file_handler(args: dict, executor: Executor) -> ToolResult:
         # the write above is atomic, so this is a reportable error, not a crash.
         return ToolResult(
             f"error writing {raw_path}: content is not encodable as UTF-8 ({exc})")
-    return ToolResult(
-        f"wrote {len(content.encode('utf-8'))} bytes to {raw_path}")
+    return ToolResult(f"wrote {_content_bytes(content)} bytes to {raw_path}")
 
 
 def _read_file_handler(args: dict, executor: Executor) -> ToolResult:
@@ -276,7 +289,7 @@ REGISTRY: dict[str, Tool] = {
         requires_confirmation=True,
         confirmation_summary=lambda args: (
             f"write_file: {args.get('path', '')} "
-            f"({len(args.get('content', ''))} bytes)"),
+            f"({_content_bytes(args.get('content', ''))} bytes)"),
         handler=_write_file_handler,
         repetition_key=lambda args: (args.get("path", ""), args.get("content", "")),
     ),

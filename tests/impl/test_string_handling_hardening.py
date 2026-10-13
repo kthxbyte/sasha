@@ -87,6 +87,11 @@ def test_s1_write_file_reports_bytes_not_characters(tmp_path):
                                  _Exec(tmp_path))
 
     assert result.text == "wrote 5 bytes to a.txt"    # not 4 characters
+    # ...and the confirmation prompt the user approves says the same thing
+    from sasha.tools import REGISTRY
+    summary = REGISTRY["write_file"].confirmation_summary(
+        {"path": "a.txt", "content": "caf\u00e9"})
+    assert "(5 bytes)" in summary
 
 
 def test_s1_write_file_creates_new_file_normally(tmp_path):
