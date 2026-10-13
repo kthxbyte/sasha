@@ -331,18 +331,28 @@ gone with it.
 
 ### Tools available to the LLM
 
-The LLM can call eight tools:
+The LLM can call nine tools:
 
 | Tool | Confirmation | Purpose |
 |---|---|---|
 | `run_command` | Confirms, *unless recognized as safe* | Propose one bash command to run in your shell. |
 | `write_file` | Confirms | Write content to a file (creates parent directories; overwrites if it exists). Not sandboxed — same unrestricted-but-confirmed model as `run_command`. |
+| `edit_file` | Confirms | Replace one exact piece of text in an existing file. `old_string` must occur **exactly once** — otherwise nothing is written and the error says which it was (not found, or ambiguous). Prefers to be used over `write_file` for changes to existing files: it sends only the changed region. Not sandboxed, like `write_file`. |
 | `read_file` | Auto-runs | Read a file's contents. Sandboxed to the current directory and below. |
 | `list_dir` | Auto-runs | List a directory's entries. Sandboxed to the current directory and below. |
 | `search_files` | Auto-runs | Regex search over file contents, recursively. Sandboxed to the current directory and below. |
 | `remember` | Auto-runs | Save a durable note for future sessions — the current project's memory if you're in a git-tracked directory, general memory otherwise. See Memory below. |
 | `question` | Auto-runs (its own UI, not the confirmation gate) | Ask you one or more structured, menu-driven questions instead of guessing between materially different approaches. See Questions below. |
 | `use_skill` | Auto-runs | Load a named skill's full instructions into context. See Skills below. |
+
+**Editing an existing file** should go through `edit_file`, not `write_file`.
+Regenerating a whole file to change one line is expensive, and past
+`read_file`'s 40000-character cap it is *impossible* — the model cannot see the
+whole file in order to reproduce it. `edit_file` needs only the region it is
+changing, so it works on files of any size, and it is byte-faithful outside that
+region (line endings included, so editing a CRLF file does not rewrite every
+line). If the text isn't unique, the edit is refused rather than guessed at —
+include a line or two of context to disambiguate.
 
 `read_file`, `list_dir`, and `search_files` run immediately with no prompt —
 a path that resolves outside the current directory is rejected with an error

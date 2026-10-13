@@ -74,13 +74,18 @@ def _atomic_write_text(path: pathlib.Path, content: str) -> None:
     nothing to lose, so it is written directly and the umask applies as usual.
     """
     if not path.exists():
-        path.write_text(content, encoding="utf-8")
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            handle.write(content)
         return
     mode = stat.S_IMODE(path.stat().st_mode)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent),
                                prefix=f".{path.name}.", suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        # newline="" everywhere: the default universal-newline translation would
+        # silently rewrite CRLF as LF (and, on Windows, LF as CRLF). For an edit
+        # that touches one region, that would corrupt every other line in the
+        # file.
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
             handle.write(content)
         os.chmod(tmp, mode)
         os.replace(tmp, path)
@@ -122,6 +127,64 @@ def _write_file_handler(args: dict, executor: Executor) -> ToolResult:
         return ToolResult(
             f"error writing {raw_path}: content is not encodable as UTF-8 ({exc})")
     return ToolResult(f"wrote {_content_bytes(content)} bytes to {raw_path}")
+
+
+def _edit_file_handler(args: dict, executor: Executor) -> ToolResult:
+    """Replace one exact occurrence of old_string with new_string.
+
+    Why this exists (ISSUE-076): write_file can only replace a WHOLE file, so
+    changing one line of a large one meant regenerating all of it -- minutes of
+    generation on a 26B, and impossible past read_file's 40000-character cap,
+    because the model could never see the whole file to reproduce it. Editing by
+    exact match needs only the region, which is what makes large-file work (and
+    so self-repair) possible at all.
+    """
+    raw_path = args.get("path", "")
+    old = args.get("old_string", "")
+    new = args.get("new_string", "")
+    resolved = pathlib.Path(executor.cwd) / raw_path
+
+    if not old:
+        return ToolResult(
+            "old_string must not be empty — use write_file to replace a whole file.")
+
+    try:
+        # newline="" so the file is read byte-faithfully; see _atomic_write_text.
+        with resolved.open("r", encoding="utf-8", newline="") as handle:
+            text = handle.read()
+    except FileNotFoundError:
+        return ToolResult(f"no such file: {raw_path}")
+    except UnicodeDecodeError:
+        return ToolResult(
+            f"{raw_path} is not valid UTF-8, so it cannot be edited by matching "
+            f"text — use run_command for a byte-level change.")
+    except OSError as exc:
+        return ToolResult(f"error reading {raw_path}: {exc}")
+
+    occurrences = text.count(old)
+    if occurrences == 0:
+        return ToolResult(
+            f"old_string was not found in {raw_path}. It must match the file "
+            f"exactly, character for character, including indentation and line "
+            f"endings — read the file (or use search_files) and copy the text "
+            f"from there.")
+    if occurrences > 1:
+        return ToolResult(
+            f"old_string appears {occurrences} times in {raw_path}, so the edit "
+            f"is ambiguous and nothing was changed. Include more of the "
+            f"surrounding text to make it unique.")
+
+    try:
+        _atomic_write_text(resolved, text.replace(old, new, 1))
+    except OSError as exc:
+        return ToolResult(f"error writing {raw_path}: {exc}")
+    except UnicodeError as exc:
+        return ToolResult(
+            f"error writing {raw_path}: replacement is not encodable as UTF-8 ({exc})")
+
+    return ToolResult(
+        f"edited {raw_path}: replaced {len(old.splitlines()) or 1} line(s) "
+        f"with {len(new.splitlines()) or 1}")
 
 
 def _read_file_handler(args: dict, executor: Executor) -> ToolResult:
@@ -292,6 +355,50 @@ REGISTRY: dict[str, Tool] = {
             f"({_content_bytes(args.get('content', ''))} bytes)"),
         handler=_write_file_handler,
         repetition_key=lambda args: (args.get("path", ""), args.get("content", "")),
+    ),
+    "edit_file": Tool(
+        name="edit_file",
+        schema={
+            "type": "function",
+            "function": {
+                "name": "edit_file",
+                "description": (
+                    "Replace one exact piece of text in an existing file. "
+                    "old_string must appear in the file exactly once — copy it "
+                    "verbatim, including indentation; include a line or two of "
+                    "context if the text you want is not unique. Prefer this "
+                    "over write_file for any change to an existing file: it "
+                    "sends only the changed region instead of the whole file. "
+                    "The user sees the change and must approve it."),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string",
+                                 "description": "file path, absolute or relative to the current directory"},
+                        "old_string": {
+                            "type": "string",
+                            "description": "the exact existing text to replace; must occur exactly once"},
+                        "new_string": {
+                            "type": "string",
+                            "description": "the replacement text; empty deletes old_string"},
+                        "description": {
+                            "type": "string",
+                            "description": "one line: what this does and why"},
+                    },
+                    "required": ["path", "old_string", "new_string", "description"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        requires_confirmation=True,
+        confirmation_summary=lambda args: (
+            f"edit_file: {args.get('path', '')}\n"
+            f"  - {' | '.join(args.get('old_string', '').splitlines()[:2])[:120]}\n"
+            f"  + {' | '.join(args.get('new_string', '').splitlines()[:2])[:120]}"),
+        handler=_edit_file_handler,
+        repetition_key=lambda args: (args.get("path", ""),
+                                     args.get("old_string", ""),
+                                     args.get("new_string", "")),
     ),
     "read_file": Tool(
         name="read_file",

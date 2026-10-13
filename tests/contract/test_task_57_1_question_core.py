@@ -299,8 +299,9 @@ def test_ac12_schema_sent_includes_question():
         _consult(stub.base_url, ScriptedConfirmer([]))
         sent_tools = stub.requests[0]["body"]["tools"]
     names = {t["function"]["name"] for t in sent_tools}
-    assert names == {"run_command", "write_file", "read_file", "list_dir",
-                      "search_files", "remember", "question", "use_skill"}
+    from sasha.tools import REGISTRY
+    assert names == set(REGISTRY)
+    assert "question" in names
 
 
 # --- AC13: repetition guard -----------------------------------------------------

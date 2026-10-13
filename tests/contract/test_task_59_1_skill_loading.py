@@ -339,8 +339,9 @@ def test_ac21_schema_sent_includes_use_skill(monkeypatch, tmp_path):
         _consult(stub.base_url, ScriptedConfirmer([]))
         sent_tools = stub.requests[0]["body"]["tools"]
     names = {t["function"]["name"] for t in sent_tools}
-    assert names == {"run_command", "write_file", "read_file", "list_dir",
-                      "search_files", "remember", "question", "use_skill"}
+    from sasha.tools import REGISTRY
+    assert names == set(REGISTRY)
+    assert "use_skill" in names
 
 
 # --- AC22: unknown-tool logging -------------------------------------------------

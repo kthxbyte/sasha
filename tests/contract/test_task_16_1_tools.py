@@ -33,16 +33,14 @@ class FakeExecutor:
 # --- AC: registry shape -----------------------------------------------------
 
 def test_ac_registry_has_exactly_five_tools():
-    # Amended by Tier 1 for Task 17.2 (project memory): a sixth tool,
-    # "remember", is added to the registry. See
-    # docs/superpowers/specs/task-17.2-remember-tool.md.
-    # Amended by Tier 1 for Task 57.1: a seventh tool, "question", is
-    # added. See docs/superpowers/specs/task-57.1-question-core.md.
-    # Amended by Tier 1 for Task 59.1: an eighth tool, "use_skill", is
-    # added. See docs/superpowers/specs/task-59.1-skill-loading.md.
+    # Amended by Tier 1 for Tasks 17.2 / 57.1 / 59.1 (remember, question,
+    # use_skill), and again on 2026-10-12 (ISSUE-076) for "edit_file".
+    # The name says "five" for historical reasons; this is deliberately an
+    # EXPLICIT set rather than a comparison against REGISTRY, so that adding a
+    # tool is a conscious declaration here rather than something that can drift
+    # in silently. The schema-sending tests check the registry itself.
     from sasha.tools import REGISTRY
-    assert set(REGISTRY) == {
-        "run_command", "write_file", "read_file", "list_dir",
+    assert set(REGISTRY) == {"run_command", "write_file", "edit_file", "read_file", "list_dir",
         "search_files", "remember", "question", "use_skill"}
 
 
