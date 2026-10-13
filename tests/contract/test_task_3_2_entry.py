@@ -51,10 +51,12 @@ def test_ac1_version(env_home):
     # hardening plus the deletion of the offer/mute economy and of directory
     # recap. The bump now needs editing only HERE and in test_task_1_1_config.py,
     # because pyproject resolves the version from sasha.__version__.
+    # Amended by Tier 1 (2026-10-12): bumped to 0.7.0, the first tagged release
+    # of the session (0.6.0 was a marker commit, tagged retroactively).
     home, env = env_home
     r = _run(env, ["--version"])
     assert r.returncode == 0
-    assert r.stdout.strip() == "sasha 0.6.0"
+    assert r.stdout.strip() == "sasha 0.7.0"
 
 
 # --- AC2 -----------------------------------------------------------------------

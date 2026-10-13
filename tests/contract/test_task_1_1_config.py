@@ -227,6 +227,11 @@ def _subproc_env():
 # local-model hardening and simplification (request gate, crash safety net,
 # `sasha repair`, compact reasoning display, single-sourced version, and the
 # deletion of the offer/mute economy and of directory recap).
+# Amended by Tier 1 (2026-10-12): version bumped to 0.7.0, which is the first
+# TAGGED release of the session -- 0.6.0 was a marker commit and was tagged
+# retroactively. Since 0.6.0: string/bytes hardening, the edit_file tool, the
+# task-survives-trimming fix, runaway-response bounds, and the deletion of
+# memory-bootstrap stage 2.
 
 def test_ac5_version_flag_prints_version_and_exits_zero():
     r = subprocess.run(
@@ -234,7 +239,7 @@ def test_ac5_version_flag_prints_version_and_exits_zero():
         capture_output=True, text=True, env=_subproc_env(), timeout=30,
     )
     assert r.returncode == 0
-    assert r.stdout.strip() == "sasha 0.6.0"
+    assert r.stdout.strip() == "sasha 0.7.0"
 
 
 def test_ac5_pyproject_declares_packaging():
@@ -284,4 +289,4 @@ def test_ac5_version_has_one_source_of_truth():
 def test_ac5_package_version():
     import sasha
 
-    assert sasha.__version__ == "0.6.0"
+    assert sasha.__version__ == "0.7.0"
