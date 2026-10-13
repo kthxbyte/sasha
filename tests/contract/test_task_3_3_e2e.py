@@ -171,9 +171,13 @@ def test_ac2_failure_consults_immediately(sasha_factory):
     # Amended by Tier 1 (2026-10-12): the trigger-economy inversion (ISSUE-067)
     # removed the OFFER state, so a failing command consults with no extra
     # keystroke and with nothing recorded against the command.
+    # Amended again (2026-10-12, ISSUE-078): the line sent was `bash -c 'exit 3'`
+    # -- an ordinary non-zero exit, which the narrowed policy no longer consults
+    # on. A line naming no command (127) is what "the shell could not do this"
+    # means, and it is what this test exercises.
     with StubServer([{"kind": "text", "text": "the hint you need"}]) as stub:
         p = sasha_factory(stub.base_url)
-        p.send("bash -c 'exit 3'")
+        p.send("no_such_command_xyz_9f2")
         p.read_until("the hint you need")        # one command, no Enter needed
         p.drain_prompt()
         assert _mute_pairs(p) == {}              # no mute bookkeeping any more
@@ -184,10 +188,14 @@ def test_ac2_failure_consults_immediately(sasha_factory):
 def test_ac3_repeated_failures_always_consult_and_never_mute(sasha_factory):
     # Amended by Tier 1 (2026-10-12): ISSUE-067 — there is no ignore streak, so
     # there is nothing to mute. Four identical failures must consult four times.
+    # Amended again (2026-10-12, ISSUE-078): uses a command-not-found line (127)
+    # rather than `bash -c 'exit 3'`, since a plain non-zero exit no longer
+    # consults. The subject -- repeated failures must not get quieter -- is
+    # unchanged.
     with StubServer([{"kind": "text", "text": "explained"}] * 4) as stub:
         p = sasha_factory(stub.base_url)
         for _ in range(4):
-            p.send("bash -c 'exit 3'")
+            p.send("no_such_command_xyz_9f2")
             p.read_until("explained")
             p.drain_prompt()
         assert len(stub.requests) == 4

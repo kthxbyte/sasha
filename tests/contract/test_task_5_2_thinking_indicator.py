@@ -127,11 +127,23 @@ def test_ac3_indicator_on_every_consult_path():
         repl.run_once("550*11")
     assert out.count(INDICATOR) == 1
 
-    # c. any non-zero exit (the OFFER path it used to exercise is gone --
-    #    amended by Tier 1 2026-10-12 for the trigger-economy inversion,
-    #    ISSUE-067)
+    # c. a CRASH signal, reported by bash as 128+N (SIGSEGV = 139). Amended by
+    #    Tier 1 (2026-10-12, ISSUE-078): this slot used an ordinary non-zero exit
+    #    (3), which the narrowed trigger policy deliberately no longer consults
+    #    on. A crash still consults, so the third distinct consult path this test
+    #    exists to cover is preserved -- and it is a better example of "worth
+    #    explaining" than a plain status was.
     with StubServer([{"kind": "text", "text": "answer three"}]) as stub:
         repl, executor, out = _repl(stub.base_url)
-        executor.next_exit = 3
-        repl.run_once("badcmd --flag")   # consults at once
+        executor.next_exit = 139
+        repl.run_once("segfault --flag")   # consults at once
     assert out.count(INDICATOR) == 1
+
+    # d. an ordinary non-zero exit consults NOTHING (ISSUE-078) -- no indicator,
+    #    because no request is made at all.
+    with StubServer([]) as stub:
+        repl, executor, out = _repl(stub.base_url)
+        executor.next_exit = 1
+        repl.run_once("grep nothing_matches here")
+    assert out.count(INDICATOR) == 0
+    assert stub.requests == []

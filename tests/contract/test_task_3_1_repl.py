@@ -130,13 +130,21 @@ def test_ac1_explicit_ask():
 
 # --- AC2: empty line ------------------------------------------------------------
 
+# Amended by Tier 1 (2026-10-12, ISSUE-078): these three tests used an ordinary
+# non-zero exit (3) as "a failing command". The trigger policy is now narrow --
+# only statuses meaning the SHELL could not run the line (127 not found, 126 not
+# executable), a crash signal, or a syntax error consult -- because a non-zero
+# exit is normal for healthy commands (grep 1, diff 1, SIGPIPE 141). They now
+# use 127, which is the status these tests are actually about: the line named no
+# command. What they test (a consult happens at once, with no offer line, and
+# the loop carries on) is unchanged.
 def test_ac2_failure_consults_immediately_without_an_offer():
     # Amended by Tier 1 (2026-10-12): the trigger-economy inversion (ISSUE-067)
     # removed the OFFER state. A failing command consults at once; there is no
     # pending offer for a following empty line to accept.
     with StubServer([{"kind": "text", "text": "here is why"}]) as stub:
         repl, executor, out, _ = _repl(stub.base_url)
-        executor.next_exit = 3
+        executor.next_exit = 127
         repl.run_once("badcmd --flag")
         assert len(stub.requests) == 1          # consulted straight away
         repl.run_once("")                       # empty line is inert
@@ -158,7 +166,7 @@ def test_ac2_empty_is_noop():
 def test_ac3_failure_consults_and_the_next_command_still_runs():
     with StubServer([{"kind": "text", "text": "explained"}]) as stub:
         repl, executor, out, _ = _repl(stub.base_url)
-        executor.next_exit = 3
+        executor.next_exit = 127
         repl.run_once("badcmd --flag")          # consults
         executor.next_exit = 0
         repl.run_once("echo hello")             # success: no consult
@@ -215,7 +223,7 @@ def test_ac6_no_offer_line_and_no_mute_notice():
     # and does it deterministically.
     with StubServer([]) as stub:
         repl, executor, out, _ = _repl(stub.base_url)
-        executor.next_exit = 3
+        executor.next_exit = 127
         for n in range(5):                      # five identical failures
             repl.run_once("badcmd")
         assert len(stub.requests) == 5          # every one attempted a consult

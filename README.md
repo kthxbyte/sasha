@@ -1,9 +1,10 @@
 # Sasha
 
 An LLM-backed interactive shell wrapper. You type shell lines; they run exactly
-as bash would. When a line fails, names a command that doesn't exist, or is
-plain natural language, Sasha consults an LLM grounded in your actual shell
-context — and nothing the LLM proposes ever runs without your confirmation.
+as bash would. When a line names no command, or is plain natural language, Sasha
+consults an LLM grounded in your actual shell context — and nothing the LLM
+proposes ever runs without your confirmation. Commands that simply *return a
+non-zero status* are left alone: a shell status is not a cry for help.
 
 ## Requirements
 
@@ -257,22 +258,34 @@ how the command behaved:
 
 | Situation | Detection | Behaviour |
 |---|---|---|
-| Command not found or plain natural language (typos, math, English) | Exit code 127 | **Consults immediately.** The LLM sees the line and answers or suggests a corrected command. |
-| Not valid bash syntax (unclosed quote, bad pipe) | Syntax pre-check fails — line is never executed | **Consults immediately.** The LLM sees the bad line and explains the syntax error. |
-| Command ran but failed | Any non-zero exit code | **Consults immediately.** The LLM sees the exit code and the captured stderr and explains what went wrong. |
-| User terminated the command (Ctrl-C) | Signal (SIGINT, SIGPIPE) | **Nothing.** You stopped it; there is nothing to explain. |
+| Command not found, or plain natural language (typos, math, English) | Exit code 127 | **Consults immediately.** The LLM sees the line and answers or suggests a corrected command. |
+| Not valid bash syntax (unclosed quote, bad pipe) | Syntax pre-check fails — the line never runs | **Consults immediately.** The LLM sees the bad line and explains the syntax error. |
+| Found, but not executable | Exit code 126 | **Consults immediately.** |
+| The program crashed | SIGSEGV / SIGABRT / SIGBUS / SIGILL / SIGFPE, which bash reports as 128+N | **Consults immediately.** A crash is worth explaining even though it arrives as an ordinary exit status. |
+| The command ran and returned a status | Any other non-zero exit code | **Nothing.** |
+| You terminated the command (Ctrl-C, SIGTERM, and SIGPIPE from quitting a pager) | Signal, or 128+N for a *stopping* signal | **Nothing.** |
 | Command succeeded | Exit code 0 | **Nothing.** |
 
-Every failure consults. An earlier version consulted only on exit 127 and
-syntax errors and merely *offered* a consult for other failures — waiting for a
-bare Enter — with a mute store to suppress repeat offers. That apparatus existed
-to spend a paid API budget conservatively. Against a local model the marginal
-token is free while a failed command is exactly when an explanation is worth
-having, so there is nothing left to ration and no offer to accept or ignore.
+**A non-zero exit is not a failure.** Plenty of healthy commands report one as
+their normal answer, and Sasha stays quiet for all of them:
 
-If the noise is unwanted for a particular command, the honest answer is to fix
-the command, or raise `history_tokens` and ignore it — not to teach Sasha to
-stay quiet about failures.
+```
+grep pattern file        exit 1    nothing matched
+diff a b                 exit 1    the files differ
+git diff --quiet         exit 1    there are changes
+git log                  exit 128  this repo has no commits yet
+git log   (quit the pager early)   exit 141  SIGPIPE
+```
+
+Consulting on those would interrupt you to explain something that needs no
+explanation — constantly. So Sasha consults when the *shell* could not do what
+you asked, not when a command did its job. When you do want an explanation for
+something that ran, ask for one: `?? why did that fail`.
+
+An earlier version of this rule went the other way and consulted on every
+non-zero exit, reasoning that a failed command is exactly when an explanation is
+worth having against a free local model. That was wrong at a terminal for
+exactly the cases above, and it has been reverted.
 
 ### Reasoning display
 
