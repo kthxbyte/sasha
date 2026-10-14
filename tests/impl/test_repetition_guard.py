@@ -219,16 +219,17 @@ def test_chat_drops_a_tool_call_that_was_cut_off_by_the_guard(monkeypatch):
 # The raised turn cap
 # ==========================================================================
 
-def test_default_turn_cap_allows_real_work():
-    """10 was too few to finish a task; 50 is a backstop, not a budget.
+def test_the_turn_cap_is_off_by_default():
+    """0 = no ceiling (ISSUE-080). The cap never caught the failure it was aimed
+    at -- runaway reasoning has no tool turns -- while interrupting long work.
 
     Asserts the default and the self-installed template rather than calling
     load(None), which would read the developer's real ~/.config/sasha/config.toml.
     """
     from sasha import config
 
-    assert config.Limits().max_tool_turns == 50
-    assert "max_tool_turns = 50" in config._DEFAULT_CONFIG_TOML
+    assert config.Limits().max_tool_turns == 0
+    assert "max_tool_turns = 0" in config._DEFAULT_CONFIG_TOML
 
 
 def test_documented_turn_cap_matches_the_code():

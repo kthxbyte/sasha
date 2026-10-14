@@ -15,6 +15,18 @@ class Confirmer(Protocol):
         ('yes', ''), ('no', ''), ('edit', edited_command), ('reply', text)."""
         ...
 
+    # Optional. A confirmer that can present SEVERAL proposed steps as one unit
+    # implements ask_many(steps) -> (verdict, payload), with the same verdict
+    # vocabulary minus 'edit' (editing one command inside a batch is ambiguous).
+    # Batching matters because a response's tool calls are usually one intent:
+    # approving the writes of a refactor but denying the test run that checks
+    # them is not a coherent thing to want. The loop only batches when a response
+    # actually contains more than one step needing approval, and falls back to
+    # one ask() per step when ask_many is absent -- so a single step, and every
+    # existing confirmer, behave exactly as before.
+    #
+    #     def ask_many(self, steps: list[tuple[str, str]]) -> tuple[str, str]: ...
+
 def run_consult(
     session: Session,
     client: ChatClient,
@@ -25,7 +37,7 @@ def run_consult(
     on_status: Callable[[str], None] | None = None,
     on_warning: Callable[[str], None] | None = None,
     on_async_status: Callable[[str], None] | None = None,
-    max_tool_turns: int = 50,
+    max_tool_turns: int = 0,
     on_phase: Callable[[str | None], None] = lambda phase: None,
     questioner: question.Questioner | None = None,
 ) -> None:
@@ -69,6 +81,47 @@ def run_consult(
 
         current_key: tuple | None = None
         current_action: tuple | None = None
+
+        # Batch approval (ISSUE-080). The tool calls in one response are normally
+        # a single intent, so they are presented and approved as one unit when
+        # more than one of them needs approval. Deliberately skipped for:
+        #   - a response containing `question`, which has its own interactive UI
+        #     and whose position in the sequence matters;
+        #   - any command touching a sensitive path, which must be looked at on
+        #     its own rather than inside a list;
+        #   - a single step, which is simply the existing behaviour (and keeps
+        #     the 'edit the command' option meaningful).
+        batch_verdict: str | None = None
+        batch_payload = ""
+        batch_ids: set[str] = set()
+        confirmable = []
+        batchable = len(response.tool_calls) > 1 and not any(
+            call.name == "question" for call in response.tool_calls)
+        if batchable:
+            for candidate in response.tool_calls:
+                tool = REGISTRY.get(candidate.name)
+                if tool is None:
+                    continue
+                wanted = tool.requires_confirmation
+                if callable(wanted):
+                    wanted = wanted(candidate.arguments, executor)
+                if not wanted:
+                    continue
+                if candidate.name == "run_command" and (
+                        safe_commands.touches_sensitive_path(
+                            candidate.arguments.get("command", ""), executor)):
+                    confirmable = []
+                    break
+                confirmable.append(candidate)
+
+        ask_many = getattr(confirmer, "ask_many", None)
+        if len(confirmable) > 1 and ask_many is not None:
+            on_phase("tool")
+            batch_verdict, batch_payload = ask_many([
+                (REGISTRY[c.name].confirmation_summary(c.arguments),
+                 c.arguments.get("description", "")) for c in confirmable])
+            on_phase(None)
+            batch_ids = {c.id for c in confirmable}
 
         for call in response.tool_calls:
             tool = REGISTRY.get(call.name)
@@ -116,12 +169,18 @@ def run_consult(
                 needs_confirmation = needs_confirmation(call.arguments, executor)
 
             if needs_confirmation:
-                summary = tool.confirmation_summary(call.arguments)
-                description = call.arguments.get("description", "")
-                verdict, payload = confirmer.ask(summary, description)
+                if call.id in batch_ids:
+                    verdict = batch_verdict
+                    payload = batch_payload
+                else:
+                    summary = tool.confirmation_summary(call.arguments)
+                    description = call.arguments.get("description", "")
+                    verdict, payload = confirmer.ask(summary, description)
 
                 if verdict == "yes":
                     executed = True
+                elif verdict == "edit" and call.id in batch_ids:
+                    result_str = (f"User did not run this and replied: {payload}")
                 elif verdict == "edit" and call.name == "run_command":
                     final_arguments = {**call.arguments, "command": payload}
                     executed_command = payload
@@ -181,7 +240,8 @@ def run_consult(
         if response.tool_calls:
             tool_turns += 1
             repeated = current_key is not None and current_key == previous_key
-            exhausted = tool_turns >= max_tool_turns
+            exhausted = (max_tool_turns > 0
+                         and tool_turns >= max_tool_turns)
             if repeated or exhausted:
                 desc = None
                 if current_action is not None:

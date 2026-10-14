@@ -123,7 +123,7 @@ api_key_required = false
 [limits]
 history_tokens = 12000
 stderr_capture_bytes = 8192
-max_tool_turns = 50
+max_tool_turns = 0
 max_think_seconds = 180
 
 [safe_commands]
@@ -166,9 +166,10 @@ enabled = false
 
 `[limits]` is written by the self-installed file with the built-in defaults
 shown in the example above; drop the keys you don't need, or delete the whole
-table to fall back to the same defaults. `max_tool_turns` (50 by default) is
-the ceiling on tool calls in one consult — raise it if Sasha stops mid-task
-with `[sasha] stopping: hit the 10-action limit`.
+table to fall back to the same defaults. `max_tool_turns` (0 by default, which
+means **no ceiling at all**) bounds the tool turns in one consult; set a positive
+number if you want that backstop, and Sasha will land the turn gracefully with a
+final text-only answer when it is reached rather than cutting you off.
 
 Four profiles are configured by default:
 
@@ -545,6 +546,34 @@ shown. Anything that isn't a narrow, read-only, auto-approved `run_command`
 always goes through this gate — nothing else the LLM proposes ever runs
 without your explicit confirmation.
 
+#### Several steps at once
+
+When one response proposes **more than one** action that needs approval, they are
+shown together and approved together, because they are normally one intent —
+write the module, write its tests, run them — and approving the middle while
+denying the rest is not a coherent thing to want:
+
+```
+[sasha] wants to perform 3 steps:
+  1. write_file: stats.py (878 bytes)
+     └ the statistics module
+  2. write_file: test_stats.py (816 bytes)
+     └ tests for it
+  3. run_command: python -m pytest
+     └ verify
+        [y]es to all / [n]o to all — or type a reply
+```
+
+`y` runs all of them, `n` (or empty) declines all of them, and anything else is a
+free-text reply to the model, exactly as at the single-step gate. There is no
+`[e]dit` here — editing one command inside a batch is ambiguous — so a **single**
+step still uses the old per-command prompt and keeps its edit option.
+
+Two things are deliberately never batched: a `question` (its own interactive UI,
+and its position in the sequence matters) and any command touching a path in
+`sensitive_paths`, which you should be looking at on its own rather than as item
+two of a list. Either of those falls back to one prompt per step.
+
 ### Questions
 
 The LLM can also pause and ask you directly, via the `question` tool,
@@ -712,10 +741,11 @@ you can tell them apart at a glance:
   [sasha] stopping: repeated identical action — <action>
   ```
 - **Turn-limit exhaustion** — the loop reaches the maximum tool-turn limit
-  for one consult (50 by default; raise it with `max_tool_turns` under
-  `[limits]` in `config.toml`):
+  for one consult — **off by default** (`max_tool_turns = 0` means no ceiling;
+  set a positive number under `[limits]` in `config.toml` to impose one). If you
+  set one, exhausting it lands the turn gracefully instead of cutting you off:
   ```
-  [sasha] stopping: hit the 50-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress
+  [sasha] stopping: hit the 20-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress
   ```
 - **The model reasoned without ever answering** — a response that reasons for
   `max_think_seconds` (180 by default) while producing no content at all is cut
@@ -753,7 +783,7 @@ Command output is never prefixed or altered.
 |---|---|
 | LLM unreachable | `[sasha] <profile> unreachable: <reason> — 'sasha profile <name>' to switch` |
 | Loop stopped (repetition) | `[sasha] stopping: repeated identical action — <action>` |
-| Loop stopped (turn limit) | `[sasha] stopping: hit the N-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress` |
+| Loop stopped (turn limit) | `[sasha] stopping: hit the N-action limit for this turn — last action: <action> — raise max_tool_turns under [limits] in config.toml if this looks like real progress` (only when a ceiling is configured; the default is none) |
 | Model repeating itself | `[sasha] llm: stopped the model mid-stream — it had begun repeating itself, so the answer above is truncated. Ask again or narrow the question.` |
 | Reasoning never answered | `[sasha] llm: stopped the model — it reasoned for <N>s (<M> characters) without producing any answer. Raise max_think_seconds under [limits] in config.toml if this is real progress.` |
 | Profile switch | `[sasha] profile: <name> (<model> @ <base_url>)` |

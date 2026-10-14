@@ -23,7 +23,15 @@ class Profile:
 class Limits:
     history_tokens: int = 12000
     stderr_capture_bytes: int = 8192
-    max_tool_turns: int = 50
+    # 0 means NO LIMIT (ISSUE-080). It was 10 and then 50; Salvador's verdict
+    # after months of use is that it "has never served the purpose I imagined it
+    # would" -- it never caught the failure it was aimed at (runaway *reasoning*,
+    # which has no tool turns at all and is now bounded by max_think_seconds)
+    # while interrupting legitimate long work. A repeated-action guard catches
+    # the tool-call loop it was meant to catch, and Ctrl+C is always available.
+    # Kept as an opt-in ceiling rather than deleted, so the graceful landing
+    # below is still there for anyone who wants one.
+    max_tool_turns: int = 0
     # How long a response may reason before producing any answer at all, in
     # seconds (ISSUE-073). Seconds rather than characters because this is a
     # patience limit, not a judgement about how much a thinking model should
@@ -175,7 +183,10 @@ api_key_required = false
 [limits]
 history_tokens = 12000
 stderr_capture_bytes = 8192
-max_tool_turns = 50
+# 0 = no limit. Set it if you want a hard ceiling on tool turns per consult;
+# hitting it lands the turn gracefully (a final text-only answer) rather than
+# cutting you off mid-thought.
+max_tool_turns = 0
 # A response that reasons for this many SECONDS without producing any answer is
 # cut off (ISSUE-073). Measured on the local 26B: a bounded question reached its
 # answer after 29s of thinking, while an unbounded one reasoned for 150s+ with no

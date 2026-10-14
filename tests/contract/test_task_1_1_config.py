@@ -65,7 +65,13 @@ def test_ac1_default_limits(isolated_env):
     # passes 20 actions), so it interrupted tasks instead of protecting them.
     # The loop it was meant to stop is now caught by the repetition guard in
     # llm.py, which watches the streamed text rather than counting turns.
-    assert lim.max_tool_turns == 50
+    # Amended by Tier 1 (2026-10-12, ISSUE-080): 50 -> 0, meaning NO LIMIT.
+    # Salvador's verdict from use is that it never served the purpose it was
+    # added for: the runaway it aimed at was *reasoning* (no tool turns at all,
+    # now bounded by max_think_seconds), while the ceiling interrupted legitimate
+    # long work. A repeated-action guard covers the tool-call loop. The ceiling
+    # remains available as an opt-in.
+    assert lim.max_tool_turns == 0
     # Amended by Tier 1 (2026-10-12): `mute_threshold` was removed with the
     # trigger-economy inversion (ISSUE-067) — there are no offers to mute.
     assert not hasattr(lim, "mute_threshold")

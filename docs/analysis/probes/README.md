@@ -15,6 +15,7 @@ them is more work than reading them.
 | `probe_agentic_task.py` | Can the loop write a module plus tests and run them? (Yes: 3 calls, 40s.) |
 | `probe_agentic_edit_task.py` | Can it explore, edit a file it did not write, and iterate on a failure? (Yes: 14 calls, 156s, including fail → re-read → fix → pass.) |
 | `probe_glob_task.py` | Does it need a filename-glob tool in a deep tree? (No: one allowlisted `find`, 10 calls.) |
+| `probe_call_batching.py` | Does the model ever propose several tool calls in one response? (Yes: calls arrived as [2, 1, 0], so the two file writes came as one intent and batching collapsed two prompts into one.) |
 | `capture_reasoning_samples.py` | Captures the streams in `../reasoning-samples/` — the evidence for the repetition finding. |
 
 ## Running them

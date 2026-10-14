@@ -600,6 +600,43 @@ class TerminalConfirmer:
         else:
             return ("reply", response)
 
+    def ask_many(self, steps):
+        """Present several proposed steps as ONE unit and take one verdict.
+
+        The tool calls in a single response are normally one intent -- write the
+        module, write its tests, run them -- and approving the middle of that
+        while denying the rest is not a coherent thing to want. So they are shown
+        together and approved together.
+
+        No 'edit' here: editing one command inside a batch is ambiguous. The loop
+        only calls this with more than one step, so a lone command still goes
+        through ask() and keeps its edit option.
+        """
+        lines = [f"[sasha] wants to perform {len(steps)} steps:"]
+        for number, (summary, description) in enumerate(steps, start=1):
+            desc = description if description else "(no description provided)"
+            lines.append(f"  {number}. {summary}")
+            lines.append(f"     └ {desc}")
+        footer = "[y]es to all / [n]o to all — or type a reply"
+        if self._sink.color_enabled:
+            body = "\n".join(
+                [_DIM + lines[0] + _RESET]
+                + [f"{_COMMAND_COLOR}{line}{_RESET}" if line[:3].strip().endswith(".")
+                   else f"{_DIM}{line}{_RESET}" for line in lines[1:]])
+            text = f"{body}\n{_PROMPT_COLOR}        {footer}{_RESET}"
+        else:
+            text = "\n".join(lines) + f"\n        {footer}"
+        self._sink.write_line(text)
+        response = self._read("> ")
+        if response is None:
+            return ("no", "")
+        response = response.strip()
+        if response in ("y", "yes"):
+            return ("yes", "")
+        if response in ("n", "no", ""):
+            return ("no", "")
+        return ("reply", response)
+
     def _read(self, prompt):
         """Read one line at the gate; None means cancelled.
 
