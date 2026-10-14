@@ -9,6 +9,7 @@ because the *evidence* is more valuable than the conclusions.
 |---|---|
 | [local-26b-simplification-audit.md](local-26b-simplification-audit.md) | What in Sasha exists to ration a paid API or a weak model, and what is worth deleting now that the model is local? Also: which of the audit's own recommendations were **wrong**, and what the measurements showed instead. |
 | [string-handling-findings.md](string-handling-findings.md) | What can go wrong at the bytes/str, encode/decode and locale boundaries? Nine confirmed defects with reproductions, plus one correction where the contract suite proved the original reading wrong. |
+| [agentic-tooling-review.md](agentic-tooling-review.md) | Is Sasha capable enough for agentic work on a 26B-class local model? Compares the tool sets of Claude Code, Codex, Gemini CLI, Cursor, opencode and DSH; reviews the published evidence on small-model tool calling; and runs two capability probes against the real model. Concludes with what to keep, what to improve, and what not to add. |
 
 Both documents carry a status section recording what was acted on, so you can
 tell which parts describe a past state and which are still live.
@@ -23,7 +24,10 @@ tell which parts describe a past state and which are still live.
   they were captured.
 - [`probes/`](probes/) — the ad-hoc scripts that produced the other
   measurements (what the endpoint actually reports, whether tool-calling works,
-  how reasoning renders, whether the crash net survives a real fault).
+  how reasoning renders, whether the crash net survives a real fault), plus
+  `probe_agentic_task.py` and `probe_agentic_edit_task.py`, which give the real
+  model two ordinary engineering tasks and check the result independently of
+  whatever the model claims.
 
 ## A caution about method
 
