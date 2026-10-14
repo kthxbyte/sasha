@@ -12,6 +12,9 @@ them is more work than reading them.
 | `probe_repl_live.py` | Does the real REPL drive the real model correctly? |
 | `probe_reasoning_modes.py` | How does `compact` versus `full` reasoning display behave on real streams? |
 | `probe_crash_net_live.py` | Does the crash safety net survive a genuine in-process fault? |
+| `probe_agentic_task.py` | Can the loop write a module plus tests and run them? (Yes: 3 calls, 40s.) |
+| `probe_agentic_edit_task.py` | Can it explore, edit a file it did not write, and iterate on a failure? (Yes: 14 calls, 156s, including fail → re-read → fix → pass.) |
+| `probe_glob_task.py` | Does it need a filename-glob tool in a deep tree? (No: one allowlisted `find`, 10 calls.) |
 | `capture_reasoning_samples.py` | Captures the streams in `../reasoning-samples/` — the evidence for the repetition finding. |
 
 ## Running them

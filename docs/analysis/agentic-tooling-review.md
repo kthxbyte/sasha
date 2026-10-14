@@ -246,6 +246,32 @@ An independent check confirms the feature works: `python3 -m app.cli 1 2 3
 --scale 2` prints `12.0`, and pytest reports 4 passed. **It wrote, ran, failed,
 read, fixed and re-ran** — that is the loop working, not a lucky single shot.
 
+### Probe 3 — find files by name in a deep tree (the glob question)
+
+> A project ~5 levels deep with ~45 files, four of them named `settings.py`.
+> Add `TIMEOUT = 30` to every one that does not already define it, then run the
+> suite. Only the *name* of the target files is known, never the location.
+
+**Result: passed, and it settles the question.** 10 tool calls, 74 seconds, all
+four files correct, suite green:
+
+```
+search_files                                          found which one already had TIMEOUT
+list_dir .                                            app/ project/ tests/
+run_command  find ... -name 'settings*.py' | sort      one call, auto-approved (both verbs allowlisted)
+read_file    notify/settings.py, auth/settings.py, billing/settings.py
+edit_file x3                                          exact tier
+run_command  pytest -> exit code 0
+```
+
+Two things follow. First, **the model reaches for allowlisted `find` naturally**,
+so filename search costs it one call and zero confirmations — a glob tool would
+add a schema, a tool-selection decision and ~130 tokens per request to duplicate
+something the shell already does frictionlessly. Second, orientation fell from 9
+calls (probe 2) to 5, because `find` did in one call what `list_dir` needed
+three for. It also **discriminated correctly**: it never opened the one
+`settings.py` that already defined `TIMEOUT`.
+
 **What the probes also expose:**
 
 - **Orientation dominates.** 9 of 14 calls in probe 2 were listing and reading.
@@ -318,12 +344,13 @@ read, fixed and re-ran** — that is the loop working, not a lucky single shot.
   works (confirmed), so the gain would be ergonomics.
 - **An LSP tool.** For a Python stdlib codebase, `run_command` with a linter
   covers it at zero selection cost.
-- **Glob — still undecided, and the evidence now splits.** Claude Code disables
-  `Glob`/`Grep` on Linux in favour of shell search, which is Sasha's position;
-  but Continue, OpenHands and goose all ship filename-oriented search, and 9 of
-  14 probe calls were orientation. The deciding experiment is a probe in a
-  larger, deeper tree: if `list_dir` + `search_files` still navigate it cheaply,
-  glob stays out.
+- **Glob — resolved: do not add.** The deciding probe (probe 3) found the model
+  issuing one allowlisted `find ... -name 'settings*.py' | sort`, auto-approved,
+  and finishing a five-level/45-file task in 10 calls with orientation down to 5.
+  Claude Code's choice to disable `Glob`/`Grep` on Linux is therefore the right
+  model to copy, and the fact that Continue/OpenHands/goose ship filename search
+  is beside the point: they are not driving a local model through a shell that
+  already has `find` on the auto-approve list.
 - **Anything from a 46-tool harness** without a measurement showing the loop needs
   it.
 
@@ -335,9 +362,8 @@ read, fixed and re-ran** — that is the loop working, not a lucky single shot.
 2. Is the confirmation gate the real blocker for agentic use, or is it fine
    because a human is watching anyway? This changes recommendation 4 completely.
 3. Should context work (2–4) precede any new tool? The measurements say yes.
-4. **Does the model need glob?** The deciding probe is a task in a deeper tree
-   where the target file's name is known but its location is not. If orientation
-   cost stays low without it, the question closes.
+4. ~~Does the model need glob?~~ **Closed by probe 3: no.** It used one
+   auto-approved `find` and finished in 10 calls.
 
 ## Sources for the harness survey
 

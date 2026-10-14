@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import difflib
 import dataclasses
 import os
 import pathlib
@@ -129,15 +130,108 @@ def _write_file_handler(args: dict, executor: Executor) -> ToolResult:
     return ToolResult(f"wrote {_content_bytes(content)} bytes to {raw_path}")
 
 
+# Editing is tolerant in tiers, the way Aider's SEARCH/REPLACE is, because the
+# models Sasha runs get whitespace slightly wrong and a bare "not found" costs a
+# whole turn to recover from. Exact matching is still tried first and is the only
+# tier that can match part of a line; the others are line-based and all of them
+# must be UNIQUE, so tolerance never means guessing.
+_ELISION_MARKERS = ("...", "# ...", "// ...", "# ... existing code ...",
+                    "# ... (existing code) ...")
+
+
+def _line_spans(text: str) -> list[tuple[int, int, str]]:
+    """(start, end, line-without-terminator) for every line, offsets preserved."""
+    spans = []
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        body = line.rstrip("\r\n")
+        spans.append((offset, offset + len(line), body))
+        offset += len(line)
+    if offset < len(text):                       # a final line with no terminator
+        spans.append((offset, len(text), text[offset:]))
+    return spans
+
+
+def _find_line_span(text: str, old: str, *, ignore_whitespace: bool,
+                    include_last_terminator: bool = False):
+    """Offset span of a UNIQUE line-run match, or None, or "ambiguous"."""
+    spans = _line_spans(text)
+    wanted = old.splitlines()
+    if not wanted or len(wanted) > len(spans):
+        return None
+    if ignore_whitespace:
+        def same(a, b):
+            return a.strip() == b.strip()
+    else:
+        def same(a, b):
+            return a == b
+
+    ends_with_newline = (include_last_terminator
+                         or old.endswith(("\n", "\r")))
+    hits = []
+    for index in range(len(spans) - len(wanted) + 1):
+        window = spans[index:index + len(wanted)]
+        if all(same(body, want) for (_, _, body), want in zip(window, wanted)):
+            # Mirror what was quoted: if old_string did not end with a newline,
+            # the span stops at the end of the last line's text and leaves the
+            # file's own terminator in place (otherwise replacing "b\nc" in
+            # "a\nb\nc" would silently swallow the final newline).
+            stop = window[-1][1] if ends_with_newline else (
+                window[-1][0] + len(window[-1][2]))
+            hits.append((window[0][0], stop))
+            if len(hits) > 1:
+                return "ambiguous"
+    return hits[0] if hits else None
+
+
+def _suggest_match(text: str, old: str) -> str:
+    """The closest real line to the first line of old_string, for a correction."""
+    first = next((ln for ln in old.splitlines() if ln.strip()), "")
+    if not first:
+        return ""
+    spans = _line_spans(text)
+    best = None
+    for number, (_, _, body) in enumerate(spans, start=1):
+        if not body.strip():
+            continue
+        ratio = difflib.SequenceMatcher(None, body.strip(),
+                                        first.strip()).ratio()
+        if best is None or ratio > best[0]:
+            best = (ratio, number, body)
+    if best is None or best[0] < 0.6:
+        return ""
+    ratio, number, body = best
+    return (f"\nThe closest line in the file is line {number}: "
+            f"{body.strip()[:120]!r} ({ratio:.0%} similar).")
+
+
+def _with_matching_endings(span_text: str, replacement: str) -> str:
+    """Keep a CRLF file CRLF: a replacement typed with LF only would leave the
+    one edited region with different endings from the rest of the file."""
+    if "\r\n" in span_text and "\r\n" not in replacement:
+        return replacement.replace("\n", "\r\n")
+    return replacement
+
+
 def _edit_file_handler(args: dict, executor: Executor) -> ToolResult:
-    """Replace one exact occurrence of old_string with new_string.
+    """Replace one occurrence of old_string with new_string, tolerantly.
 
     Why this exists (ISSUE-076): write_file can only replace a WHOLE file, so
     changing one line of a large one meant regenerating all of it -- minutes of
     generation on a 26B, and impossible past read_file's 40000-character cap,
-    because the model could never see the whole file to reproduce it. Editing by
-    exact match needs only the region, which is what makes large-file work (and
-    so self-repair) possible at all.
+    because the model could never see the whole file to reproduce it.
+
+    Matching is tried in tiers (ISSUE-079), and a tier is only used when it
+    yields exactly ONE match:
+
+      1. exact substring           -- also the only tier matching part of a line
+      2. line-run, whitespace-insensitive -- indentation/trailing-space drift
+      3. line-run separated by an elision marker ("...") -- quote the ends of a
+         long block instead of all of it
+
+    Measured elsewhere in the field: this is the shape Aider's SEARCH/REPLACE
+    uses, and the reason is that small models produce near-miss whitespace
+    constantly while a bare "not found" costs a turn to recover from.
     """
     raw_path = args.get("path", "")
     old = args.get("old_string", "")
@@ -161,30 +255,95 @@ def _edit_file_handler(args: dict, executor: Executor) -> ToolResult:
     except OSError as exc:
         return ToolResult(f"error reading {raw_path}: {exc}")
 
+    how = ""
+    start = stop = None
+
+    # --- tier 1: exact, and the only tier that can match inside a line ---
     occurrences = text.count(old)
-    if occurrences == 0:
-        return ToolResult(
-            f"old_string was not found in {raw_path}. It must match the file "
-            f"exactly, character for character, including indentation and line "
-            f"endings — read the file (or use search_files) and copy the text "
-            f"from there.")
-    if occurrences > 1:
+    if occurrences == 1:
+        start = text.index(old)
+        stop = start + len(old)
+        how = "exact"
+        # If the match begins *inside* the line's indentation, the model's
+        # leading whitespace is a suffix of the real indentation -- it meant the
+        # whole line and under-indented. Replacing the substring would add the
+        # difference and silently produce e.g. 12 spaces where 8 were meant, so
+        # take the line-aligned interpretation when it is unique.
+        if (old[:1] in (" ", "\t") and start > 0
+                and text[start - 1] in (" ", "\t")):
+            span = _find_line_span(text, old, ignore_whitespace=True)
+            if span and span != "ambiguous":
+                start, stop = span
+                how = "whitespace-insensitive"
+    elif occurrences > 1:
         return ToolResult(
             f"old_string appears {occurrences} times in {raw_path}, so the edit "
             f"is ambiguous and nothing was changed. Include more of the "
             f"surrounding text to make it unique.")
 
+    # --- tier 2: line-run, ignoring leading/trailing whitespace ---
+    # Not restricted to multi-line old_string: a single line with trailing
+    # whitespace or different indentation is the commonest drift of all, and
+    # ambiguity is caught below, so tolerance here never means guessing.
+    if start is None:
+        span = _find_line_span(text, old, ignore_whitespace=True)
+        if span == "ambiguous":
+            return ToolResult(
+                f"old_string matches more than one place in {raw_path} once "
+                f"whitespace is ignored, so nothing was changed. Include more "
+                f"surrounding text to make it unique.")
+        if span:
+            start, stop = span
+            how = "whitespace-insensitive"
+
+    # --- tier 3: an elision marker stands for lines the model did not quote ---
+    if start is None:
+        marker = next((m for m in _ELISION_MARKERS
+                       if any(ln.strip() == m for ln in old.splitlines())), None)
+        if marker is not None:
+            head, _, tail = old.partition(marker)
+            # The newlines either side of the marker are separators, not lines.
+            head, tail = head.strip("\r\n"), tail.strip("\r\n")
+            head_span = (_find_line_span(text, head, ignore_whitespace=True)
+                         if head.strip() else None)
+            # An elided edit replaces a whole BLOCK, so the tail line's own
+            # terminator belongs to the span -- unlike a plain edit, where the
+            # model's quoted ending decides.
+            tail_span = (_find_line_span(text, tail, ignore_whitespace=True,
+                                         include_last_terminator=True)
+                         if tail.strip() else None)
+            if head_span == "ambiguous" or tail_span == "ambiguous":
+                return ToolResult(
+                    f"the text either side of {marker!r} matches more than one "
+                    f"place in {raw_path}, so nothing was changed. Quote more of "
+                    f"the surrounding text.")
+            if head_span and tail_span and head_span[1] <= tail_span[0]:
+                start, stop = head_span[0], tail_span[1]
+                how = f"elided on {marker!r}"
+
+    if start is None:
+        return ToolResult(
+            f"old_string was not found in {raw_path}, so nothing was changed."
+            + _suggest_match(text, old)
+            + "\nRead the file (or use search_files) and copy the text from "
+              "there. Leading/trailing whitespace may differ; an elision marker "
+              "('...' on its own line) may stand in for lines you do not quote.")
+
+    span_text = text[start:stop]
+    updated = text[:start] + _with_matching_endings(span_text, new) + text[stop:]
+
     try:
-        _atomic_write_text(resolved, text.replace(old, new, 1))
+        _atomic_write_text(resolved, updated)
     except OSError as exc:
         return ToolResult(f"error writing {raw_path}: {exc}")
     except UnicodeError as exc:
         return ToolResult(
             f"error writing {raw_path}: replacement is not encodable as UTF-8 ({exc})")
 
+    removed = len(old.splitlines()) or 1
+    added = len(new.splitlines()) or 1
     return ToolResult(
-        f"edited {raw_path}: replaced {len(old.splitlines()) or 1} line(s) "
-        f"with {len(new.splitlines()) or 1}")
+        f"edited {raw_path} ({how}): replaced {removed} line(s) with {added}")
 
 
 def _read_file_handler(args: dict, executor: Executor) -> ToolResult:
@@ -363,13 +522,14 @@ REGISTRY: dict[str, Tool] = {
             "function": {
                 "name": "edit_file",
                 "description": (
-                    "Replace one exact piece of text in an existing file. "
-                    "old_string must appear in the file exactly once — copy it "
-                    "verbatim, including indentation; include a line or two of "
-                    "context if the text you want is not unique. Prefer this "
-                    "over write_file for any change to an existing file: it "
-                    "sends only the changed region instead of the whole file. "
-                    "The user sees the change and must approve it."),
+                    "Replace one piece of text in an existing file. Prefer this "
+                    "to write_file for changes to an existing file: it sends "
+                    "only the changed region. old_string must match exactly "
+                    "once, so include a line or two of context when it is not "
+                    "unique. Indentation and trailing whitespace are matched "
+                    "tolerantly, and a line containing only `...` stands in for "
+                    "lines in between you do not quote. The user approves the "
+                    "change."),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -377,7 +537,7 @@ REGISTRY: dict[str, Tool] = {
                                  "description": "file path, absolute or relative to the current directory"},
                         "old_string": {
                             "type": "string",
-                            "description": "the exact existing text to replace; must occur exactly once"},
+                            "description": "existing text to replace; must match once. A line of `...` elides lines in between"},
                         "new_string": {
                             "type": "string",
                             "description": "the replacement text; empty deletes old_string"},

@@ -350,13 +350,29 @@ The LLM can call nine tools:
 |---|---|---|
 | `run_command` | Confirms, *unless recognized as safe* | Propose one bash command to run in your shell. |
 | `write_file` | Confirms | Write content to a file (creates parent directories; overwrites if it exists). Not sandboxed — same unrestricted-but-confirmed model as `run_command`. |
-| `edit_file` | Confirms | Replace one exact piece of text in an existing file. `old_string` must occur **exactly once** — otherwise nothing is written and the error says which it was (not found, or ambiguous). Prefers to be used over `write_file` for changes to existing files: it sends only the changed region. Not sandboxed, like `write_file`. |
+| `edit_file` | Confirms | Replace one piece of text in an existing file. `old_string` must match **exactly once** — otherwise nothing is written and the error says which it was, *and names the closest real line* so the model can correct itself in one turn. Matching is tolerant in tiers: exact, then whitespace-insensitive (indentation and trailing space drift), then a line containing only `...` standing in for lines in between. Prefers to be used over `write_file` for changes to existing files: it sends only the changed region. Not sandboxed, like `write_file`. |
 | `read_file` | Auto-runs | Read a file's contents. Sandboxed to the current directory and below. |
 | `list_dir` | Auto-runs | List a directory's entries. Sandboxed to the current directory and below. |
 | `search_files` | Auto-runs | Regex search over file contents, recursively. Sandboxed to the current directory and below. |
 | `remember` | Auto-runs | Save a durable note for future sessions — the current project's memory if you're in a git-tracked directory, general memory otherwise. See Memory below. |
 | `question` | Auto-runs (its own UI, not the confirmation gate) | Ask you one or more structured, menu-driven questions instead of guessing between materially different approaches. See Questions below. |
 | `use_skill` | Auto-runs | Load a named skill's full instructions into context. See Skills below. |
+
+`edit_file` is deliberately **tolerant** because small models get whitespace
+subtly wrong and a bare "not found" costs a whole turn to recover from. Tiers are
+tried in order and a tier is only used when it yields exactly one match, so
+tolerance never means guessing at where an edit goes:
+
+1. **exact** — the only tier that can also match part of a line.
+2. **whitespace-insensitive** — line-based; indentation and trailing space may
+   differ from the file.
+3. **elided** — a line containing only `...` stands for lines between the quoted
+   head and tail, so a long block can be edited without quoting all of it.
+
+A CRLF file stays CRLF: the replacement is converted to match the region it
+replaces, rather than leaving one edited region with different endings from the
+rest of the file. This shape is borrowed from Aider's SEARCH/REPLACE, which uses
+the same tiers for the same reason.
 
 **Editing an existing file** should go through `edit_file`, not `write_file`.
 Regenerating a whole file to change one line is expensive, and past

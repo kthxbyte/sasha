@@ -215,3 +215,114 @@ def test_confirmation_prompt_shows_the_change():
     assert "src/x.py" in summary
     assert "return 1" in summary and "-" in summary
     assert "return 2" in summary and "+" in summary
+
+
+# ==========================================================================
+# Tolerant matching (ISSUE-079) — Aider-shaped tiers
+# ==========================================================================
+
+def test_single_line_drift_matches_on_whitespace(tmp_path):
+    """The commonest real drift: the model's indentation is close but not exact."""
+    f = tmp_path / "m.py"
+    f.write_text("def f():\n        return 1\n")
+
+    r = _edit(tmp_path, path="m.py", old_string="    return 1",
+              new_string="        return 42")
+
+    assert "whitespace-insensitive" in r.text
+    assert f.read_text() == "def f():\n        return 42\n"
+
+
+def test_trailing_whitespace_drift_matches(tmp_path):
+    f = tmp_path / "m.py"
+    f.write_text("alpha   \nbeta\n")
+
+    r = _edit(tmp_path, path="m.py", old_string="alpha\nbeta\n",
+              new_string="ALPHA\nBETA\n")
+
+    assert "whitespace-insensitive" in r.text
+    assert f.read_text() == "ALPHA\nBETA\n"
+
+
+def test_whitespace_tier_refuses_when_it_would_be_ambiguous(tmp_path):
+    """Tolerance must never mean guessing."""
+    f = tmp_path / "m.py"
+    original = "def f():\n    return 1\n\n\ndef g():\n    return 1\n"
+    f.write_text(original)
+
+    r = _edit(tmp_path, path="m.py", old_string="return 1",
+              new_string="return 2")
+
+    assert "appears" in r.text or "more than one place" in r.text
+    assert f.read_text() == original
+
+
+def test_whitespace_tier_keeps_a_crlf_file_crlf(tmp_path):
+    """A replacement typed with LF must not leave one region of a CRLF file
+    with different endings from the rest."""
+    f = tmp_path / "win.txt"
+    f.write_bytes(b"alpha\r\nbeta\r\ngamma\r\n")
+
+    _edit(tmp_path, path="win.txt", old_string="beta\ngamma",
+          new_string="BETA\nGAMMA")
+
+    assert f.read_bytes() == b"alpha\r\nBETA\r\nGAMMA\r\n"
+
+
+def test_elision_marker_replaces_a_span_the_model_did_not_quote(tmp_path):
+    """Quote the ends of a long block instead of all of it."""
+    f = tmp_path / "m.py"
+    f.write_text("def f():\n    a = 1\n    b = 2\n    c = 3\n    return a\n")
+
+    r = _edit(tmp_path, path="m.py",
+              old_string="def f():\n...\n    return a\n",
+              new_string="def f():\n    return 99\n")
+
+    assert "elided" in r.text
+    assert f.read_text() == "def f():\n    return 99\n"
+
+
+def test_elision_refuses_when_the_head_is_ambiguous(tmp_path):
+    f = tmp_path / "m.py"
+    original = "def f():\n    return 1\n\n\ndef f():\n    return 2\n"
+    f.write_text(original)
+
+    r = _edit(tmp_path, path="m.py",
+              old_string="def f():\n...\n    return 9\n",
+              new_string="X\n")
+
+    assert "not found" in r.text or "more than one place" in r.text
+    assert f.read_text() == original
+
+
+def test_not_found_offers_the_closest_real_line(tmp_path):
+    """A bare "not found" costs a turn to recover from; a pointer does not."""
+    f = tmp_path / "m.py"
+    f.write_text("def compute(values):\n    total = sum(values)\n"
+                 "    return total\n")
+
+    r = _edit(tmp_path, path="m.py", old_string="return totaal",
+              new_string="return 0")
+
+    assert "not found" in r.text
+    assert "closest line" in r.text
+    assert "line 3" in r.text
+    assert "return total" in r.text
+
+
+def test_exact_still_wins_and_reports_which_tier_was_used(tmp_path):
+    f = tmp_path / "m.py"
+    f.write_text("alpha\nbeta\n")
+
+    r = _edit(tmp_path, path="m.py", old_string="beta", new_string="BETA")
+
+    assert "(exact)" in r.text
+
+
+def test_partial_line_exact_match_still_works(tmp_path):
+    f = tmp_path / "m.py"
+    f.write_text("    return 1\n")
+
+    _edit(tmp_path, path="m.py", old_string="return 1", new_string="return 2")
+
+    assert f.read_text() == "    return 2\n"
