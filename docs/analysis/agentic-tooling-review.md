@@ -71,6 +71,48 @@ The convergence across every harness is exactly: **shell, read, write/edit,
 search**. Sasha has all four, and its extra tools (`remember`, `question`,
 `use_skill`) exist in none of the others — so this is not a one-way gap.
 
+### Open-source and local-first harnesses
+
+Surveyed separately because these are the projects that have to cope with weak
+models, which is Sasha's situation. Aider, Cline and Continue keep a fixed
+built-in set; OpenHands, goose and gptme are registry/extension-based.
+
+| Project | Tools | Editing | Local-model provisions |
+|---|---|---|---|
+| **Aider** | **none — no tool API at all** | six+ edit formats: `whole`, SEARCH/REPLACE `diff`, `diff-fenced`, `udiff`, `patch` | `--edit-format` defaults to "depends on model"; `--weak-model` does summaries; reflection retry capped at 3; model-specific hacks (Deepseek Coder v2 puts the filename inside the fence) |
+| **Cline** | 9 SDK tools | exact-string `editor`; `apply_patch` mutually exclusive with it | per-tool retry policy (editing tools never retry); plan mode keeps shell read-only; "do not enable two similar tools at once" |
+| **Continue** | 18 built-ins | exact-string `single_find_and_replace`, `multi_edit`, lazy-snippet `edit_existing_file` | `PROVIDER_TOOL_SUPPORT` decides whether native tool calling is used **at all**, per provider and model |
+| **OpenHands** | registry; default `terminal`, `file_editor`, `task_tracker` | `str_replace_editor` (exact string) or `edit_file` (1-indexed line range) | native function calling *probed*, not assumed; text-parsing fallback when absent; flags shrink the list |
+| **goose** | extension-based; `developer` is exactly `write`, `edit`, `shell`, `tree`, `read_image` | `edit` find/replace with single-match enforcement; `write` whole file | **tool shim** for models that emit tool calls as plaintext; Code Mode; lead/worker model split; per-tool repetition counter |
+| **gptme** | ~40, allowlist-controlled | `patch` (fenced SEARCH/REPLACE — **not** unified diff), `save`, `append` | three tool formats (`markdown`/`xml`/`tool`); `--tools`, `TOOL_ALLOWLIST`, `read-only`, `none`; "try xml first" for weak models; native tools need 7B+ |
+
+Sources: `aider/coders/editblock_coder.py`, `cline/sdk/.../tools/definitions.ts`,
+`continue/core/tools/builtIn.ts`, `openhands/controller/stuck.py` (v0.20.0) and
+`software-agent-sdk`, `goose/.../platform_extensions/developer/mod.rs`,
+`gptme/docs/tool-formats.rst`.
+
+**Cross-cutting results:**
+
+- **Exact-string replace is universal** — Aider's SEARCH/REPLACE, Cline's
+  `editor`, Continue's `single_find_and_replace`, OpenHands'
+  `str_replace_editor`, goose's `edit`. Five of the six also ship whole-file
+  write alongside it. **Unified diff appears in only two projects in this entire
+  review** (Aider's `udiff`, Codex's `apply_patch`). Sasha's `edit_file` +
+  `write_file` pair is the mainstream choice, not a compromise.
+- **No project was verifiable as AST-aware.** Nothing to chase.
+- **Aider is the most instructive because it has no tools at all**: it makes the
+  *edit format* the interface and varies it per model. Its SEARCH/REPLACE apply
+  path is a three-tier tolerant matcher — perfect match, then
+  whitespace-insensitive, then `...` elision — and on failure it emits
+  `SearchReplaceNoExactMatch` plus a "Did you mean" and asks for corrected
+  blocks. That is a direct, proven answer to the thing Sasha does strictly.
+- **Only two projects publish a numeric tool-count rule**: goose (Code Mode is
+  "best for 5+ extensions"; traditional calling suits "1-3") and gptme, which
+  notes that every enabled tool's schema is serialised into every request.
+- **goose ships a todo extension but leaves it off by default**, and gptme's
+  `todo` is opt-in. That is a third data point against treating a todo tool as
+  mandatory.
+
 ---
 
 ## 3. What the evidence says about *small* models specifically
@@ -134,6 +176,31 @@ agent tooling is advice from frontier-model experience, which does not transfer.
 - [measured] For small models the failure is the *combination* of planning,
   calling and summarising ([2401.07324](https://arxiv.org/abs/2401.07324)).
 
+### What the tool schemas cost, measured
+
+gptme's point is measurable in Sasha, and it is bigger than it looks. Every
+request serialises all nine schemas:
+
+| tool | chars | ~tokens |
+|---|---|---|
+| `edit_file` | 1,007 | 251 |
+| `question` | 917 | 229 |
+| `write_file` | 662 | 165 |
+| `search_files` | 633 | 158 |
+| `remember` | 582 | 145 |
+| `use_skill` | 579 | 144 |
+| `list_dir` | 503 | 125 |
+| `run_command` | 486 | 121 |
+| `read_file` | 408 | 102 |
+| **total** | **5,777** | **~1,444** |
+
+So the tool definitions consume **~12% of the 12,000-token history budget**
+before a single message is sent (~15% including the system prompt). That reframes
+"how many tools does a 26B need": each tool is paid for in history on every turn,
+whether or not it is used. `edit_file` and `question` alone are 480 tokens, and
+both descriptions can be tightened substantially without losing information —
+the cheapest context win available after compaction.
+
 ---
 
 ## 4. Can it actually do the work? Two probes
@@ -194,52 +261,71 @@ read, fixed and re-ran** — that is the loop working, not a lucky single shot.
 
 ### Keep, with evidence
 
-1. **Nine tools.** Inside the measured single-digit-to-low-teens band. Claude
-   Code's 46 is not a target; Codex does serious work with a shell and a patch
-   tool; Claude Code disables its own search tools on Linux.
-2. **No glob tool.** Sasha's allowlisted shell search is the same choice Anthropic
-   makes on this platform. Adding a tool would spend selection attention on
-   something the shell already does without a prompt.
-3. **No todo tool — for now.** No ablation supports it, the one planning
-   measurement found planning is *not* the binding constraint, and the reason it
-   looked necessary here was a bug (history trimming discarded the original task,
-   fixed in ISSUE-077). Revisit only if long runs demonstrably lose the thread.
-4. **Sequential tool execution.** Matches every local serving stack's default.
-5. **Turn cap + repeated-action detector.** BFCL caps turns for the same reason.
+1. **Nine tools.** Inside the measured single-digit-to-low-teens band, and both
+   Codex and Claude Code demonstrate that fewer tools is a valid design rather
+   than a limitation. Claude Code's 46 is not a target.
+2. **Exact-string `edit_file` beside whole-file `write_file`.** The universal
+   choice across every harness surveyed, including the two that use no tools at
+   all. The probe also shows the 26B discriminates correctly: `edit_file` on the
+   file it did not write, `write_file` for the new ones.
+3. **Sequential tool execution.** Matches every local serving stack's default.
+4. **Turn cap + repeated-action detector.** BFCL caps turns for the same reason.
+5. **No todo tool — for now.** No published ablation exists, the one planning
+   measurement found planning is not the binding constraint, goose and gptme both
+   leave theirs opt-in, and the reason it looked necessary here was a bug that is
+   now fixed (ISSUE-077).
+6. **No `apply_patch`.** Unified diff appears in two projects out of ten.
 
 ### Improve, ranked
 
-1. **Enable DRY on the endpoint** (`dry_multiplier: 0.0` → ~0.8). It is the only
-   *measured* anti-loop intervention (47% fewer loops, quality preserved),
-   whereas the repeat penalties already active on the endpoint trade fluency for
-   it. Server-side, not a Sasha change.
-2. **Clear stale tool results instead of dropping whole exchanges.** Anthropic's
-   documented technique and the direct answer to Context Rot. Sasha currently
-   trims oldest-first, discarding the assistant/tool pair entirely; replacing old
-   tool *result bodies* with a short placeholder keeps the conversation coherent
-   at a fraction of the tokens. Highest-value remaining context work.
-3. **Restate the task near the end of the window.** "Lost in the middle" says
-   both ends matter; the pin (ISSUE-077) covers the start only.
-4. **Reduce confirmation friction for edits.** Six prompts for one small task is
-   the difference between usable and not. A session-scoped "allow edits under
-   this project" opt-in would preserve the safety model while making agentic runs
-   practical. **This is a design decision for Salvador, not a bug.**
-5. **Subagent delegation — the one genuine "maybe".** It is the recommended
-   context-isolation technique for small windows, and 9-of-14 orientation calls
-   is exactly the cost it removes. But one `task`-style tool is the useful part;
-   the orchestration families in DSH/Codex are not, and no small-model evidence
-   supports them.
+1. **Enable DRY on the endpoint** (`dry_multiplier: 0.0` → ~0.8). The only
+   *measured* anti-loop intervention: 47% fewer loops while preserving quality,
+   where the repeat penalties already active trade fluency for it. Server-side,
+   not a Sasha change.
+2. **Make `edit_file` tolerant, the way Aider's SEARCH/REPLACE is.** Today a
+   whitespace difference yields a bare "not found", and a 26B will produce
+   near-miss whitespace regularly. Aider's three tiers — exact, then
+   whitespace-insensitive, then `...` elision — plus a "did you mean" on failure
+   is the proven shape, and it costs no schema tokens. **This is the highest-value
+   code change on the list.**
+3. **Clear stale tool *results* instead of dropping whole exchanges.** Anthropic's
+   documented answer to context rot. Sasha trims oldest-first and discards the
+   assistant/tool pair entirely; replacing old result bodies with a short
+   placeholder keeps the conversation coherent at a fraction of the tokens.
+4. **Trim the two fattest schemas.** `edit_file` and `question` are 480 tokens of
+   the 1,444, on every request. Recovering ~300 of them is ~2.5% of the history
+   budget for zero capability loss.
+5. **Restate the task near the *end* of the window.** "Lost in the middle" says
+   both ends matter; the pin (ISSUE-077) covers only the start.
+6. **Borrow OpenHands' stuck heuristics.** Sasha has only the consecutive-action
+   case. OpenHands adds three concrete thresholds worth adopting: three identical
+   actions whose observations are *also* all errors; three agent messages with no
+   observation between; and a six-step alternating A-B-A-B pattern. Comparing
+   the observation as well as the action is what makes the run-tests-fix-run-tests
+   pattern safe to allow.
+7. **Reduce confirmation friction for edits.** Six prompts for one small task is
+   the difference between usable and not. A session-scoped "allow edits under this
+   project" opt-in would preserve the safety model while making agentic runs
+   practical. **A design decision for Salvador, not a bug.**
+8. **One `task`-style subagent — the genuine "maybe".** It is the recommended
+   context-isolation technique for small windows, and 9-of-14 orientation calls is
+   exactly the cost it removes. Only worth it if larger-tree work shows the cost
+   is real.
 
 ### Do not add
 
-- **Web tools.** Codex gates them; the local-first choice stands; and `curl` via
-  `run_command` already works (confirmed), so the gain would be ergonomics.
-- **An LSP tool.** opencode and Claude Code have one; for a Python stdlib
-  codebase, `run_command` with a linter covers it at zero selection cost.
-- **Anything from a 46-tool harness** without a measurement showing the loop
-  needs it.
-
----
+- **Web tools.** Codex gates them; the local-first choice stands; `curl` already
+  works (confirmed), so the gain would be ergonomics.
+- **An LSP tool.** For a Python stdlib codebase, `run_command` with a linter
+  covers it at zero selection cost.
+- **Glob — still undecided, and the evidence now splits.** Claude Code disables
+  `Glob`/`Grep` on Linux in favour of shell search, which is Sasha's position;
+  but Continue, OpenHands and goose all ship filename-oriented search, and 9 of
+  14 probe calls were orientation. The deciding experiment is a probe in a
+  larger, deeper tree: if `list_dir` + `search_files` still navigate it cheaply,
+  glob stays out.
+- **Anything from a 46-tool harness** without a measurement showing the loop needs
+  it.
 
 ## 6. Open questions
 
@@ -248,4 +334,16 @@ read, fixed and re-ran** — that is the loop working, not a lucky single shot.
    and would also test the orientation cost.
 2. Is the confirmation gate the real blocker for agentic use, or is it fine
    because a human is watching anyway? This changes recommendation 4 completely.
-3. Should context work (2) precede any new tool? The measurements say yes.
+3. Should context work (2–4) precede any new tool? The measurements say yes.
+4. **Does the model need glob?** The deciding probe is a task in a deeper tree
+   where the target file's name is known but its location is not. If orientation
+   cost stays low without it, the question closes.
+
+## Sources for the harness survey
+
+Claude Code: <https://code.claude.com/docs/en/tools-reference> ·
+Gemini CLI: <https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/tools.md> ·
+Cursor: <https://cursor.com/docs/agent/overview> ·
+Codex tool specs (source-derived; OpenAI publishes no tool reference) ·
+opencode and DeepSeek Harness: read from the installed code on this machine.
+The open-source survey's per-project source files are listed in its section.
