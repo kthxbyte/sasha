@@ -1,0 +1,5 @@
+prompt: Name three Python standard-library modules for terminal handling, one sentence each.
+terminated: True
+elapsed_s: 13.7
+reasoning_chars: 1671
+content_chars: 336

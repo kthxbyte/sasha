@@ -1,0 +1,5 @@
+prompt: Why does a leaked file descriptor matter in a shell wrapper? Answer in three sentences.
+terminated: True
+elapsed_s: 8.0
+reasoning_chars: 797
+content_chars: 361

@@ -1,0 +1,5 @@
+prompt: Explain how a PTY works between a shell wrapper and vim.
+terminated: False
+elapsed_s: 75.0
+reasoning_chars: 10383
+content_chars: 0

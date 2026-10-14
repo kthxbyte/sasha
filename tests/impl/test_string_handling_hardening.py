@@ -1,6 +1,6 @@
 """Regression tests for the string/bytes handling fixes (ISSUE-072).
 
-Each test corresponds to a finding in scratchpad/string-handling-findings.md and
+Each test corresponds to a finding in docs/analysis/string-handling-findings.md and
 was written by reproducing the original defect first. The reproductions that
 matter are the ones where the *content* is reachable from ordinary model output
 (a JSON lone-surrogate escape) or from the filesystem (a path whose bytes are

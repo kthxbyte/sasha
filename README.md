@@ -781,6 +781,14 @@ directory's state/config folders — see Memory above:
 - `<repo-root>/.sasha/.gitignore` — self-installed, keeps all of the above
   out of git automatically
 
+## Further reading
+
+Measured findings about Sasha — what its own features cost, which parts of them
+were worth deleting, what can go wrong at the string/bytes boundaries, and the
+raw model output behind those conclusions — are kept in
+[`docs/analysis/`](docs/analysis/). They include the audit's own mistakes, which
+is the useful part.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

@@ -1,7 +1,7 @@
 """Text-handling policy in one place.
 
 Two rules the whole codebase needs, both found by probing rather than reading
-(see scratchpad/string-handling-findings.md for the reproductions):
+(see docs/analysis/string-handling-findings.md for the reproductions):
 
 **1. File and stream text I/O is always UTF-8, explicitly.**
 Never rely on ``locale.getpreferredencoding()``. Under ``PYTHONUTF8=0`` or a
